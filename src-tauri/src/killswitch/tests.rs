@@ -1,12 +1,17 @@
 //! Test 7.6 — 100 cycles activate/deactivate, doit détecter toute fuite d'état.
 //! `FakeNftablesBackend` uniquement : jamais de `pkexec` ni d'accès au vrai système nftables.
 
+use crate::capture::FakeCaptureSubsystem;
+
 use super::nftables::FakeNftablesBackend;
 use super::KillSwitchState;
 
 #[test]
 fn cent_cycles_activation_desactivation_sans_fuite() {
-    let state = KillSwitchState::with_backend(Box::new(FakeNftablesBackend::new()));
+    let state = KillSwitchState::with_backend(
+        Box::new(FakeNftablesBackend::new()),
+        Box::new(FakeCaptureSubsystem::new()),
+    );
 
     for cycle in 0..100 {
         let activated = state.activate();

@@ -238,6 +238,53 @@ logique sans toucher au code d'orchestration.
   PolarProxy → attribution → capture → keylog est câblé dès maintenant pour ne pas avoir à
   retoucher `sequence.rs` plus tard.
 
+## 6quater. EPIC 2 — Capture réseau brute (décidé 2026-07-09)
+
+Premier domaine réel après le squelette kill switch. Décisions tranchées pour lever
+l'ambiguïté laissée ouverte en section 2 ("libpcap / AF_PACKET").
+
+- **Crate de capture : `pnet`** (pas `pcap`/libpcap). Pur Rust, pas de dépendance système
+  C supplémentaire à l'exécution, cohérent avec la préférence sovereignty (moins de
+  dépendances externes imposées). `pnet::datalink` ouvre un canal AF_PACKET par interface,
+  `pnet::packet` parse Ethernet/IPv4/IPv6/TCP/UDP sans code maison bas niveau.
+- **Parsing SNI (2.3) : crate `tls-parser`** (rusticata) pour extraire le champ SNI du
+  ClientHello TLS en clair — pas de déchiffrement, lecture d'un champ non chiffré du
+  handshake. Pas de dépendance OpenSSL/rustls nécessaire pour cette seule extraction.
+- **Élévation de privilèges — divergence assumée par rapport à 6bis** : la capture est un
+  processus continu (tant que le kill switch est actif), pas une action ponctuelle comme
+  nftables/CA. Un prompt polkit à chaque activation serait une friction inutile pour quelque
+  chose qui n'est pas destructif ni système-global. Décision : un troisième binaire du
+  workspace, `vitrail-capture-helper`, reçoit à l'installation (EPIC 10, `setcap`) les
+  capacités Linux `cap_net_raw,cap_net_admin+eip` — un périmètre bien plus étroit que root,
+  jamais de mot de passe à l'usage. Il tourne en utilisateur normal, pas de daemon root.
+  En dev, Chris devra faire `sudo setcap cap_net_raw,cap_net_admin+eip
+  target/debug/vitrail-capture-helper` manuellement après chaque build (documenté dans
+  `README.md`/`CONTRIBUTING.md`).
+- **Modèle de process** : `capture/mod.rs` (app Tauri, non privilégiée) spawn le binaire
+  `vitrail-capture-helper` une fois à l'activation (`Subsystem::start`), le tue proprement à
+  la désactivation (`Subsystem::stop`, `SIGTERM` puis timeout avant `SIGKILL`). Le helper
+  ouvre un thread de capture par interface active détectée dynamiquement
+  (`pnet::datalink::interfaces()`, filtre `up && !loopback`, pas d'interface en dur — 2.1),
+  et écrit un flux JSON Lines sur stdout (un enregistrement par paquet retenu : 5-tuple,
+  timestamp, octets, SNI si présent, protocole détecté best-effort). L'app parent lit stdout
+  en continu (thread dédié) et alimente un buffer interne.
+- **Débit (2.5)** : limiteur de débit type token-bucket dans le helper lui-même (pas côté
+  app), seuil configurable (défaut proposé : 2000 paquets/s), paquets excédentaires comptés
+  et droppés avec un avertissement périodique (pas un log par paquet perdu) plutôt que
+  transmis — protège autant le helper que l'app parent.
+- **Persistance provisoire** : comme `system_events` (6ter), les enregistrements de capture
+  sont journalisés en JSONL append-only (`$XDG_DATA_HOME/vitrail/capture_events.jsonl`,
+  600) en attendant EPIC 6/SQLite — PAS une réécriture du contrat `Flow` existant
+  (`commands/types.rs`), qui reste servi par les mocks jusqu'à EPIC 5 (corrélation) qui
+  fusionnera captures réelles + attribution + contenu déchiffré en un seul flux exploitable
+  par l'UI. Ce périmètre EPIC 2 est donc backend uniquement, sans nouvelle commande IPC
+  visible dans le Timeline/Dashboard pour l'instant (juste le statut "actif" du subsystem
+  dans le panneau kill switch, déjà câblé par EPIC 7).
+- **`capture::CaptureSubsystem`** implémente le trait `Subsystem` de `killswitch/subsystem.rs`
+  et remplace le `StubSubsystem` nommé "capture" dans la séquence 7.2/7.3 — aucune autre
+  modification de `killswitch/` nécessaire (c'est exactement la garantie que le squelette
+  devait fournir).
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

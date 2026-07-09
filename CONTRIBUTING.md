@@ -25,6 +25,23 @@ bun install
 ./start.sh
 ```
 
+### Capacités réseau du helper de capture
+
+`vitrail-capture-helper` (`vitrail-capture-helper/`) ouvre un canal AF_PACKET passif — ça
+nécessite `cap_net_raw` et `cap_net_admin`, jamais une exécution root. Après **chaque**
+`cargo build` (ou `cargo build --workspace`) qui reconstruit ce binaire, réattribuez les
+capacités réseau :
+
+```bash
+sudo setcap cap_net_raw,cap_net_admin+eip target/debug/vitrail-capture-helper
+```
+
+`cargo build` régénère le binaire sans préserver les capacités (nouvel inode) — sans cette
+commande, `CaptureSubsystem::start()` échoue silencieusement en dev (`bun run tauri dev`) ou
+en test manuel, avec une erreur de permission peu explicite. `cap_net_raw,cap_net_admin+eip`
+est le minimum nécessaire à une capture passive : jamais de `sudo` sur le binaire lui-même,
+cohérent avec le principe de moindre privilège du projet (voir `docs/PLAN.md` §6quater).
+
 ## Structure du projet
 
 Architecture par domaine, pas par couche technique — voir `ARCHITECTURE.md`. Avant

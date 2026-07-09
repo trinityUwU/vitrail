@@ -7,7 +7,8 @@ le backlog non structuré.
 
 - [x] EPIC 0 — Fondations projet (scaffold Tauri, CI, scripts, licence) — CI (0.3) restant
 - [ ] EPIC 1 — Attribution processus (OpenSnitch)
-- [ ] EPIC 2 — Capture réseau brute
+- [x] EPIC 2 — Capture réseau brute — pnet + tls-parser, vitrail-capture-helper (setcap
+      cap_net_raw/cap_net_admin), CaptureSubsystem branché dans le kill switch
 - [ ] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE)
 - [ ] EPIC 4 — Décryptage TLS actif (PolarProxy, fail-open)
 - [ ] EPIC 5 — Moteur de corrélation
@@ -27,7 +28,8 @@ le backlog non structuré.
 
 - [x] Repo GitHub public créé et poussé : https://github.com/trinityUwU/vitrail.
 - [x] EPIC 7 (squelette kill switch) livré, audité, corrigé — voir STATE.md.
-- [ ] EPIC 2 — Capture réseau brute (AF_PACKET), prochain de l'ordre décidé.
+- [x] EPIC 2 (capture réseau brute) livré, audité, corrigé — voir STATE.md.
+- [ ] EPIC 1 — Attribution processus (serveur gRPC ui.proto), prochain de l'ordre décidé.
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").

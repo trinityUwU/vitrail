@@ -21,9 +21,12 @@ use std::sync::Mutex;
 use nftables::{NftablesBackend, SystemNftablesBackend};
 use sequence::Step;
 use snapshot::{append_event, SystemSnapshot};
-use subsystem::{StubSubsystem, Subsystem};
+use subsystem::StubSubsystem;
 use thiserror::Error;
 
+pub use subsystem::Subsystem;
+
+use crate::capture::CaptureSubsystem;
 use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
 
 #[derive(Debug, Error)]
@@ -32,6 +35,13 @@ pub enum KillSwitchError {
     NftablesExec(String),
     #[error("échec de persistance system_events: {0}")]
     Persistence(String),
+    /// Erreur générique d'exécution d'un sous-système réel (ex: spawn du binaire privilégié
+    /// `vitrail-capture-helper`). Décision non explicitement tranchée dans PLAN.md : variante
+    /// ajoutée pour donner à `capture::CaptureSubsystem` un `Result` fidèle plutôt que de
+    /// détourner `NftablesExec` — réutilisable par les futurs domaines réels (attribution,
+    /// decryption, keylog) quand ils remplaceront leur `StubSubsystem`.
+    #[error("échec du sous-système {subsystem}: {reason}")]
+    SubsystemExec { subsystem: String, reason: String },
     #[error("activation interrompue à l'étape {step}: {reason}")]
     ActivationFailed { step: String, reason: String },
 }
@@ -41,7 +51,7 @@ struct Inner {
     nftables: Box<dyn NftablesBackend>,
     polarproxy: StubSubsystem,
     attribution: StubSubsystem,
-    capture: StubSubsystem,
+    capture: Box<dyn Subsystem>,
     keylog: StubSubsystem,
     pre_activation_snapshot: Option<SystemSnapshot>,
     active: bool,
@@ -55,19 +65,24 @@ pub struct KillSwitchState {
 
 impl KillSwitchState {
     pub fn new() -> Self {
-        Self::with_backend(Box::new(SystemNftablesBackend))
+        Self::with_backend(
+            Box::new(SystemNftablesBackend),
+            Box::new(CaptureSubsystem::new()),
+        )
     }
 
-    /// Constructeur pour les tests (7.6) : jamais de `SystemNftablesBackend` en test —
-    /// injecter un `FakeNftablesBackend` garantit qu'aucun `pkexec` réel n'est déclenché.
-    pub fn with_backend(nftables: Box<dyn NftablesBackend>) -> Self {
+    /// Constructeur pour les tests (7.6/EPIC 2) : jamais de `SystemNftablesBackend` ni de
+    /// vrai `CaptureSubsystem` en test — injecter des variantes en mémoire
+    /// (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`) garantit qu'aucun `pkexec` ni
+    /// aucun process privilégié réel n'est déclenché par un test.
+    pub fn with_backend(nftables: Box<dyn NftablesBackend>, capture: Box<dyn Subsystem>) -> Self {
         Self {
             inner: Mutex::new(Inner {
                 ca: StubSubsystem::new("ca"),
                 nftables,
                 polarproxy: StubSubsystem::new("polarproxy"),
                 attribution: StubSubsystem::new("attribution"),
-                capture: StubSubsystem::new("capture"),
+                capture,
                 keylog: StubSubsystem::new("keylog"),
                 pre_activation_snapshot: None,
                 active: false,
@@ -197,7 +212,7 @@ fn build_subsystem_refs(inner: &Inner) -> Vec<&dyn Subsystem> {
         &inner.ca,
         &inner.polarproxy,
         &inner.attribution,
-        &inner.capture,
+        &*inner.capture,
         &inner.keylog,
     ]
 }
@@ -210,7 +225,7 @@ fn build_steps(inner: &Inner) -> Vec<Step<'_>> {
         Step::Nftables(&*inner.nftables),
         Step::Subsystem(&inner.polarproxy),
         Step::Subsystem(&inner.attribution),
-        Step::Subsystem(&inner.capture),
+        Step::Subsystem(&*inner.capture),
         Step::Subsystem(&inner.keylog),
     ]
 }

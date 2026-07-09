@@ -53,4 +53,6 @@ MIT — voir [`LICENSE`](LICENSE).
 
 ## Contribuer
 
-Voir [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Voir [`CONTRIBUTING.md`](CONTRIBUTING.md). Note setup dev : le binaire
+`vitrail-capture-helper` nécessite un `setcap` après chaque build — détail dans
+[`CONTRIBUTING.md`](CONTRIBUTING.md#capacités-réseau-du-helper-de-capture).
