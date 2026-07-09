@@ -8,6 +8,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::correlation::CorrelationSender;
 use crate::killswitch::{KillSwitchError, Subsystem};
 use crate::storage::StorageHandle;
 
@@ -32,11 +33,14 @@ pub struct AttributionSubsystem {
     /// que de jeter l'information après le seul log `tracing::warn!` de `detect()`.
     last_detection: Mutex<Option<DaemonDetection>>,
     storage: StorageHandle,
+    /// Canal vers `correlation/` (EPIC 5) — cloné dans `server::start` pour chaque connexion
+    /// gérée par `UiService::handle_connection`.
+    correlation: CorrelationSender,
 }
 
 impl AttributionSubsystem {
-    pub fn new(storage: StorageHandle) -> Self {
-        Self::with_configurator(Box::new(SystemDaemonConfigurator), storage)
+    pub fn new(storage: StorageHandle, correlation: CorrelationSender) -> Self {
+        Self::with_configurator(Box::new(SystemDaemonConfigurator), storage, correlation)
     }
 
     /// Constructeur pour les tests : injecte un `DaemonConfigurator` en mémoire, jamais de
@@ -46,6 +50,7 @@ impl AttributionSubsystem {
     pub fn with_configurator(
         configurator: Box<dyn DaemonConfigurator>,
         storage: StorageHandle,
+        correlation: CorrelationSender,
     ) -> Self {
         Self {
             active: AtomicBool::new(false),
@@ -54,6 +59,7 @@ impl AttributionSubsystem {
             cache: Arc::new(ProcessCache::new()),
             last_detection: Mutex::new(None),
             storage,
+            correlation,
         }
     }
 
@@ -119,8 +125,13 @@ impl Subsystem for AttributionSubsystem {
             restore_on_abnormal_exit(configurator_for_guard.as_ref(), &storage_for_guard)
         });
 
-        let handle = server::start(socket_path.clone(), self.cache.clone(), on_abnormal_exit)
-            .map_err(Self::exec_error)?;
+        let handle = server::start(
+            socket_path.clone(),
+            self.cache.clone(),
+            self.correlation.clone(),
+            on_abnormal_exit,
+        )
+        .map_err(Self::exec_error)?;
 
         let detection = self.configurator.detect(&target);
         if !detection.installed {
@@ -282,8 +293,11 @@ mod tests {
         let configurator = Arc::new(FakeDaemonConfigurator::new());
         let storage = crate::storage::StorageHandle::open_in_memory()
             .expect("ouverture storage en mémoire pour le test");
-        let subsystem =
-            AttributionSubsystem::with_configurator(Box::new(configurator.clone()), storage);
+        let subsystem = AttributionSubsystem::with_configurator(
+            Box::new(configurator.clone()),
+            storage,
+            crate::correlation::channel().0,
+        );
 
         subsystem.start().expect("start() aurait dû réussir");
         assert!(subsystem.is_active());
@@ -332,8 +346,11 @@ mod tests {
         let configurator = Arc::new(FakeDaemonConfigurator::new());
         let storage = crate::storage::StorageHandle::open_in_memory()
             .expect("ouverture storage en mémoire pour le test");
-        let subsystem =
-            AttributionSubsystem::with_configurator(Box::new(configurator.clone()), storage);
+        let subsystem = AttributionSubsystem::with_configurator(
+            Box::new(configurator.clone()),
+            storage,
+            crate::correlation::channel().0,
+        );
 
         subsystem.start().expect("start() aurait dû réussir");
         configurator.fail_set.store(true, AtomicOrdering::SeqCst);

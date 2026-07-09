@@ -2,6 +2,11 @@
 //! `StubSubsystem` "capture" (PLAN.md §6quater) : spawn/pilote le binaire privilégié
 //! `vitrail-capture-helper`, lit son stdout JSON Lines en continu, persiste chaque paquet
 //! via `events::append_packet`. `stop()` envoie `SIGTERM` puis `SIGKILL` en dernier recours.
+//!
+//! EPIC 5 : chaque paquet retenu est AUSSI publié vers `correlation/` via `CorrelationSender`
+//! (en plus de la persistance `storage::capture_events` existante, jamais à la place) —
+//! `send_capture` est non-bloquant (`try_send`), un canal plein ne fait jamais échouer ni
+//! ralentir la lecture du flux stdout du helper (PLAN.md §6septies).
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
@@ -10,6 +15,7 @@ use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::correlation::CorrelationSender;
 use crate::killswitch::{KillSwitchError, Subsystem};
 use crate::storage::StorageHandle;
 
@@ -29,14 +35,16 @@ pub struct CaptureSubsystem {
     active: AtomicBool,
     running: Mutex<Option<RunningProcess>>,
     storage: StorageHandle,
+    correlation: CorrelationSender,
 }
 
 impl CaptureSubsystem {
-    pub fn new(storage: StorageHandle) -> Self {
+    pub fn new(storage: StorageHandle, correlation: CorrelationSender) -> Self {
         Self {
             active: AtomicBool::new(false),
             running: Mutex::new(None),
             storage,
+            correlation,
         }
     }
 
@@ -87,7 +95,9 @@ impl Subsystem for CaptureSubsystem {
         })?;
 
         let storage = self.storage.clone();
-        let reader = std::thread::spawn(move || read_capture_stream(&storage, stdout));
+        let correlation = self.correlation.clone();
+        let reader =
+            std::thread::spawn(move || read_capture_stream(&storage, &correlation, stdout));
         let stderr_reader = std::thread::spawn(move || read_stderr_stream(stderr));
 
         let mut running = self.running.lock().expect("mutex capture empoisonné");
@@ -176,10 +186,15 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
     false
 }
 
-/// Lit le stdout du helper ligne par ligne, parse chaque enregistrement JSON, persiste. Une
+/// Lit le stdout du helper ligne par ligne, parse chaque enregistrement JSON, persiste, ET
+/// publie vers `correlation/` (EPIC 5 — en plus de la persistance, jamais à la place). Une
 /// ligne invalide est loggée et ignorée (jamais fatale) ; une erreur de lecture stoppe le
 /// thread (le pipe est de toute façon fermé si le process est mort).
-fn read_capture_stream(storage: &StorageHandle, stdout: ChildStdout) {
+fn read_capture_stream(
+    storage: &StorageHandle,
+    correlation: &CorrelationSender,
+    stdout: ChildStdout,
+) {
     let reader = BufReader::new(stdout);
     for line in reader.lines() {
         let line = match line {
@@ -197,6 +212,7 @@ fn read_capture_stream(storage: &StorageHandle, stdout: ChildStdout) {
                 if let Err(error) = append_packet(storage, &packet) {
                     tracing::error!(error = %error, "persistance d'un paquet capturé échouée");
                 }
+                correlation.send_capture(packet);
             }
             Err(error) => {
                 tracing::warn!(error = %error, line = %line, "ligne JSON de capture invalide, ignorée");

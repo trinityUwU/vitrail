@@ -9,4 +9,6 @@ pub enum StorageError {
     Sqlite(#[from] rusqlite::Error),
     #[error("erreur d'E/S: {0}")]
     Io(#[from] std::io::Error),
+    #[error("erreur de sérialisation JSON: {0}")]
+    Serde(#[from] serde_json::Error),
 }

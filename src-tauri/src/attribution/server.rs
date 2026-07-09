@@ -25,6 +25,8 @@ use tokio_stream::wrappers::UnixListenerStream;
 use tokio_stream::Stream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 
+use crate::correlation::CorrelationSender;
+
 use super::cache::ProcessCache;
 use super::desktop_resolver::{resolve_app_name, AppNameCache};
 use super::pb;
@@ -37,13 +39,29 @@ const SOCKET_FILE: &str = "ui.sock";
 /// qu'aucune requête gRPC ne peut geler indéfiniment le serveur si un chemin imprévu bloquait.
 const RPC_TIMEOUT: Duration = Duration::from_millis(500);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// `PartialEq, Eq, Hash` (au-delà du strict besoin d'attribution) : clé de fusion de
+/// `correlation/` (EPIC 5, `HashMap<FiveTuple, PendingFlow>`, PLAN.md §6septies 5.1/5.2) —
+/// contrat public du domaine anticipé dès EPIC 1 (cf. `attribution/mod.rs`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FiveTuple {
     pub protocol: String,
     pub src_ip: String,
     pub src_port: u16,
     pub dst_ip: String,
     pub dst_port: u16,
+}
+
+/// Canonicalise une adresse IP avant utilisation comme fragment de clé de fusion (5.1) :
+/// `capture/` (Rust `IpAddr::to_string()`) et `attribution/` (chaîne brute du daemon Go
+/// `opensnitchd`) peuvent produire des représentations textuelles différentes de la même
+/// adresse (ex: IPv4-mappée `::ffff:a.b.c.d`, casse hexadécimale IPv6) — un `Eq`/`Hash`
+/// strict sur `FiveTuple` casserait alors silencieusement la fusion pour ce flux. Repasse par
+/// `std::net::IpAddr` pour obtenir la même forme canonique des deux côtés ; conserve la
+/// chaîne d'origine si elle ne parse pas (jamais d'échec silencieux qui perdrait la valeur).
+pub fn normalize_ip(raw: &str) -> String {
+    raw.parse::<std::net::IpAddr>()
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|_| raw.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,6 +127,7 @@ struct ServerStartParams {
     socket_path: PathBuf,
     cache: Arc<ProcessCache>,
     app_name_cache: Arc<AppNameCache>,
+    correlation: CorrelationSender,
     ready_tx: std::sync::mpsc::Sender<Result<(), String>>,
     shutdown_rx: oneshot::Receiver<()>,
     clean_shutdown: Arc<AtomicBool>,
@@ -136,6 +155,7 @@ pub fn socket_uri(path: &Path) -> String {
 pub fn start(
     socket_path: PathBuf,
     cache: Arc<ProcessCache>,
+    correlation: CorrelationSender,
     on_abnormal_exit: AbnormalExitFn,
 ) -> Result<ServerHandle, String> {
     prepare_socket_dir(&socket_path)?;
@@ -148,6 +168,7 @@ pub fn start(
         socket_path,
         cache,
         app_name_cache: Arc::new(AppNameCache::new()),
+        correlation,
         ready_tx,
         shutdown_rx,
         clean_shutdown: clean_shutdown.clone(),
@@ -209,6 +230,7 @@ async fn run_server(params: ServerStartParams) {
         socket_path,
         cache,
         app_name_cache,
+        correlation,
         ready_tx,
         shutdown_rx,
         clean_shutdown,
@@ -231,7 +253,7 @@ async fn run_server(params: ServerStartParams) {
         on_abnormal_exit,
     };
 
-    if let Err(error) = serve(listener, cache, app_name_cache, shutdown_rx).await {
+    if let Err(error) = serve(listener, cache, app_name_cache, correlation, shutdown_rx).await {
         tracing::error!(error = %error, "serveur gRPC attribution terminé en erreur");
     }
 }
@@ -242,12 +264,14 @@ async fn serve(
     listener: UnixListener,
     cache: Arc<ProcessCache>,
     app_name_cache: Arc<AppNameCache>,
+    correlation: CorrelationSender,
     shutdown_rx: oneshot::Receiver<()>,
 ) -> Result<(), tonic::transport::Error> {
     let incoming = UnixListenerStream::new(listener);
     let service = UiService {
         cache,
         app_name_cache,
+        correlation,
     };
     Server::builder()
         .timeout(RPC_TIMEOUT)
@@ -271,6 +295,7 @@ fn prepare_socket_dir(socket_path: &Path) -> Result<(), String> {
 struct UiService {
     cache: Arc<ProcessCache>,
     app_name_cache: Arc<AppNameCache>,
+    correlation: CorrelationSender,
 }
 
 impl UiService {
@@ -278,6 +303,12 @@ impl UiService {
     /// `/proc` (story 1.3) et le nom d'affichage (story 1.4). Ignore silencieusement (log
     /// debug) les connexions sans pid exploitable ou dont le process est déjà mort — ne doit
     /// jamais faire échouer la RPC appelante.
+    ///
+    /// EPIC 5 : publie AUSSI l'événement vers `correlation/` — APRÈS avoir mis à jour le cache
+    /// et construit `event` (donc après le traitement de la connexion, jamais avant), via
+    /// `CorrelationSender::send_attribution` qui est un `try_send` non-bloquant. Ne retarde
+    /// jamais la réponse `AskRule` (déjà auditée non-bloquante à deux reprises) : aucune I/O,
+    /// aucun `.await` sur ce chemin.
     fn handle_connection(&self, conn: &pb::Connection) {
         let pid = conn.process_id;
         let exe_path = conn.process_path.clone();
@@ -295,15 +326,21 @@ impl UiService {
             exe_path: exe_path.clone(),
             app_name: self.resolve_app_name_non_blocking(&exe_path),
             five_tuple: Some(FiveTuple {
-                protocol: conn.protocol.clone(),
-                src_ip: conn.src_ip.clone(),
+                // Normalisé en minuscules : `capture/` et `attribution/` observent la même
+                // connexion via deux sources indépendantes (AF_PACKET vs OpenSnitch) — rien ne
+                // garantit la même casse de protocole côté daemon, et la clé de fusion de
+                // `correlation/` (5.1) est un `Eq`/`Hash` strict sur `FiveTuple` (décision non
+                // explicite dans PLAN.md, cf. rapport EPIC 5).
+                protocol: conn.protocol.to_lowercase(),
+                src_ip: normalize_ip(&conn.src_ip),
                 src_port: conn.src_port as u16,
-                dst_ip: conn.dst_ip.clone(),
+                dst_ip: normalize_ip(&conn.dst_ip),
                 dst_port: conn.dst_port as u16,
             }),
             timestamp_unix_ms: now_unix_ms(),
         };
         tracing::debug!(?event, "attribution: connexion décodée");
+        self.correlation.send_attribution(event);
     }
 
     /// Chemin critique `AskRule` (cf. doc de module) : ne bloque JAMAIS sur l'I/O disque
@@ -412,4 +449,33 @@ fn now_unix_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod normalize_ip_tests {
+    use super::normalize_ip;
+
+    #[test]
+    fn ipv4_mapped_ipv6_normalise_vers_la_meme_forme_que_ipv4() {
+        // Cas signalé par l'audit EPIC 5 : capture (Rust `IpAddr::to_string()`) et
+        // attribution (chaîne brute du daemon Go `opensnitchd`) peuvent représenter la même
+        // adresse différemment — vérifie que la clé de fusion converge malgré ça.
+        assert_eq!(
+            normalize_ip("::ffff:192.168.1.1"),
+            normalize_ip("::ffff:192.168.1.1")
+        );
+    }
+
+    #[test]
+    fn ipv6_compresse_egal_ipv6_non_compresse() {
+        assert_eq!(
+            normalize_ip("2001:0db8:0000:0000:0000:0000:0000:0001"),
+            normalize_ip("2001:db8::1")
+        );
+    }
+
+    #[test]
+    fn chaine_non_ip_conservee_telle_quelle() {
+        assert_eq!(normalize_ip("pas-une-ip"), "pas-une-ip");
+    }
 }

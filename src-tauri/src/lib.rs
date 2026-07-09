@@ -1,6 +1,6 @@
-//! Point d'entrée Tauri — monte les commandes IPC et l'émetteur d'événements de dev.
-//! Domaines réels (attribution, capture, decryption, keylog, correlation, storage,
-//! killswitch) sont stubés (EPIC 0) et implémentés dans les EPICs 1 à 7.
+//! Point d'entrée Tauri — monte les commandes IPC et démarre le moteur de corrélation.
+//! Domaines réels : attribution (EPIC 1), capture (EPIC 2), storage (EPIC 6), killswitch
+//! (EPIC 7), correlation (EPIC 5). `decryption`/`keylog` restent stubés (EPIC 3/4 à venir).
 
 mod attribution;
 mod capture;
@@ -13,26 +13,25 @@ mod shared;
 mod storage;
 
 use commands::{
-    alerts, dashboard, destinations, flows, killswitch as ks_commands, mock_flows, processes,
-    search, settings,
+    alerts, dashboard, destinations, flows, killswitch as ks_commands, processes, search, settings,
 };
 use tauri::Emitter;
 
-/// Intervalle de l'émetteur factice temporaire (EPIC 8.4) — remplacé par le streaming réel
-/// de `correlation` quand EPIC 5.4 sera implémenté.
-const MOCK_LIVE_FLOW_INTERVAL_SECS: u64 = 4;
-
-fn spawn_mock_live_flow_emitter(app: &tauri::App) {
+/// Démarre le moteur de corrélation (EPIC 5.4) — consomme le récepteur créé avant la
+/// construction de `tauri::Builder` (le canal doit déjà exister pour être cloné dans
+/// `KillSwitchState::new`, mais le thread du moteur n'a besoin d'un `AppHandle` pour émettre
+/// `vitrail://flow` qu'une fois `.setup()` atteint). `receiver` est pris dans un `Option`
+/// capturé par la closure `FnOnce` de `.setup()` : ne peut être appelé qu'une fois, ce qui est
+/// exactement la sémantique voulue (un seul moteur pour la durée de vie de l'app).
+fn start_correlation_engine(
+    app: &tauri::App,
+    receiver: correlation::CorrelationEventReceiver,
+    storage: storage::StorageHandle,
+) {
     let handle = app.handle().clone();
-    std::thread::spawn(move || {
-        let mut seq: u64 = 0;
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(MOCK_LIVE_FLOW_INTERVAL_SECS));
-            seq += 1;
-            let flow = mock_flows::mock_live_flow(seq);
-            if let Err(error) = handle.emit("vitrail://flow", &flow) {
-                eprintln!("échec d'émission de l'événement flow factice: {error}");
-            }
+    correlation::spawn(receiver, storage, move |flow| {
+        if let Err(error) = handle.emit("vitrail://flow", flow) {
+            tracing::error!(error = %error, "échec d'émission de l'événement vitrail://flow");
         }
     });
 }
@@ -41,19 +40,32 @@ fn spawn_mock_live_flow_emitter(app: &tauri::App) {
 pub fn run() {
     tracing_subscriber::fmt::init();
 
+    // Canal capture/attribution → correlation (EPIC 5) : créé AVANT `KillSwitchState::new()`
+    // pour que l'émetteur (`CorrelationSender`) puisse être cloné dans `CaptureSubsystem`/
+    // `AttributionSubsystem` dès leur construction — le récepteur n'est consommé par le
+    // moteur qu'au `.setup()`, une fois l'`AppHandle` Tauri disponible pour émettre
+    // `vitrail://flow`.
+    let (correlation_sender, correlation_receiver) = correlation::channel();
+
     // Connexion storage ouverte une seule fois ici (migrations exécutées avant tout le reste,
     // PLAN.md §6sexies) : `KillSwitchState::new()` l'ouvre en interne puis l'expose via
-    // `storage_handle()` pour que `commands/settings.rs` la partage (même `Arc<Mutex<...>>`,
-    // jamais une deuxième connexion vers le même fichier).
-    let killswitch_state = killswitch::KillSwitchState::new();
+    // `storage_handle()` pour que `commands/settings.rs`/`commands/flows.rs` la partagent
+    // (même `Arc<Mutex<...>>`, jamais une deuxième connexion vers le même fichier).
+    let killswitch_state = killswitch::KillSwitchState::new(correlation_sender);
     let storage_handle = killswitch_state.storage_handle();
+
+    let mut correlation_receiver = Some(correlation_receiver);
+    let storage_for_correlation = storage_handle.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(killswitch_state)
         .manage(storage_handle)
-        .setup(|app| {
-            spawn_mock_live_flow_emitter(app);
+        .setup(move |app| {
+            let receiver = correlation_receiver
+                .take()
+                .expect("le récepteur de corrélation ne doit être pris qu'une seule fois");
+            start_correlation_engine(app, receiver, storage_for_correlation.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

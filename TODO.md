@@ -12,7 +12,9 @@ le backlog non structuré.
       cap_net_raw/cap_net_admin), CaptureSubsystem branché dans le kill switch
 - [ ] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE)
 - [ ] EPIC 4 — Décryptage TLS actif (PolarProxy, fail-open)
-- [ ] EPIC 5 — Moteur de corrélation
+- [x] EPIC 5 — Moteur de corrélation — fusion capture+attribution par 5-tuple/fenêtre 5s,
+      visibilité Meta/Attrib réelle (Fully/Unknown prêts pour EPIC 3/4), flows/flows_fts
+      alimentées, timeline temps réel réelle (remplace l'émetteur factice EPIC 8.4)
 - [x] EPIC 6 — Stockage & requêtes — SQLite WAL (rusqlite bundled), migre les 3 JSONL
       provisoires EPIC 7/2/1, purge/rétention/sessions réelles ; flows/processes/FTS5
       créées vides (alimentées en EPIC 5)
@@ -22,7 +24,8 @@ le backlog non structuré.
 - [~] EPIC 8 — Contrat UI / IPC — frontend + commandes complètes livrées et auditées
       (contrat Flow complet, exclusions centralisées, CRUD alertes, recherche sauvegardée,
       purge, tag, historique session, notifications/keylog persistés), streaming réel (8.4)
-      encore un émetteur factice, contrat de types généré (8.5) toujours manuel
+      désormais réel (EPIC 5, événement vitrail://flow), contrat de types généré (8.5)
+      toujours manuel
 - [ ] EPIC 9 — Sécurité & durcissement
 - [ ] EPIC 10 — Packaging & distribution
 - [ ] EPIC 11 — Documentation communautaire & visibilité
@@ -34,7 +37,8 @@ le backlog non structuré.
 - [x] EPIC 2 (capture réseau brute) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 1 (attribution processus) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 6 (storage SQLite) livré, audité, corrigé — voir STATE.md.
-- [ ] EPIC 5 — Corrélation timeline, prochain de l'ordre décidé.
+- [x] EPIC 5 (corrélation timeline) livré, audité, corrigé — voir STATE.md.
+- [ ] EPIC 3 — Pipeline SSLKEYLOGFILE, prochain de l'ordre décidé.
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").

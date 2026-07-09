@@ -383,6 +383,60 @@ SQLite, sans changer le comportement observable de ces domaines (mêmes tests ve
   `Connection::open_in_memory()`), utilisé dans les tests des domaines appelants au lieu du
   vrai fichier `vitrail.db`.
 
+## 6septies. EPIC 5 — Moteur de corrélation (décidé 2026-07-09)
+
+Quatrième domaine réel. EPIC 5 arrive dans l'ordre décidé AVANT keylog (EPIC 3) et
+PolarProxy (EPIC 4) — seules 2 des 4 sources prévues (capture, attribution) existent
+réellement à ce stade. La fusion doit fonctionner avec seulement ces 2 sources aujourd'hui,
+et accueillir décryptage/keylog plus tard sans réécriture.
+
+- **Clé de fusion (5.1)** : le message `Connection` de `ui.proto` (attribution) transporte
+  déjà un 5-tuple complet (`protocol`, `src_ip`, `src_port`, `dst_ip`, `dst_port`) — même
+  granularité que les enregistrements `capture/`. Clé de fusion : 5-tuple exact + fenêtre
+  temporelle tolérante (proposé : 5 secondes — les timestamps capture/attribution ne sont
+  jamais strictement synchrones, `AskRule` peut arriver avant ou après les premiers paquets
+  vus par `capture/`).
+- **Résolution de conflits (5.2)** : un buffer en mémoire (`HashMap<FiveTuple, PendingFlow>`)
+  accumule les fragments par clé ; un flux est émis (un seul enregistrement) soit dès qu'au
+  moins une source de contenu (decryption/keylog, absentes pour l'instant) confirme la
+  fusion, soit après expiration de la fenêtre tolérante avec les sources déjà disponibles
+  (capture seul, ou capture+attribution). Jamais un doublon par source.
+- **Visibilité (5.3)** — mapping explicite entre sources disponibles et `FlowVisibility`
+  (`Fully`/`Meta`/`Attrib`/`Unknown`, déjà dans le contrat IPC `commands/types.rs`) :
+  - contenu déchiffré présent (decryption OU keylog — aucune des deux n'existe encore,
+    prévu pour rester correct une fois EPIC 3/4 livrés) → `Fully`.
+  - capture présente (5-tuple/SNI/protocole vus sur le réseau), pas de contenu → `Meta`.
+  - attribution présente (pid/exe connu via `AskRule`) mais capture absente (rare : paquet
+    raté par le rate-limiter EPIC 2.5, ou interface non capturée) → `Attrib`.
+  - rien de tout ça → `Unknown` (ne devrait normalement jamais être émis comme `Flow` réel,
+    réservé aux cas dégénérés/tests).
+- **Émission temps réel (5.4)** : remplace l'émetteur factice `spawn_mock_live_flow_emitter`
+  (`src-tauri/src/lib.rs`, EPIC 8.4, réservé jusqu'ici) par l'émission réelle de l'événement
+  Tauri `vitrail://flow` à chaque `Flow` produit par le moteur de corrélation — contrat
+  d'événement déjà consommé côté frontend (`src/timeline/useTimelineFlows.ts`), AUCUN
+  changement frontend nécessaire si le payload reste un `Flow` valide. Chaque `Flow` produit
+  est aussi persisté dans `storage::flows` (table créée vide en EPIC 6, alimentée pour de
+  vrai à partir de cette passe).
+- **Remplacement des mocks (`commands/flows.rs`)** : `list_flows`/`get_flow_detail`/
+  `search_flows` lisent désormais `storage::flows` au lieu de `mock_flows::flows()` —
+  `mock_flows.rs` n'est plus utilisé par `commands/flows.rs` après cette passe (peut rester
+  utilisé ailleurs le temps de vérifier, sinon supprimé si mort). `search_flows` peut
+  utiliser la table FTS5 `flows_fts` créée en EPIC 6 (encore vide jusqu'ici) — c'est le
+  moment de la brancher pour de vrai (5.4 texte + 6.4 recherche, les deux se rejoignent ici).
+- **Sources capture/attribution → correlation** : `correlation/` s'abonne aux événements en
+  mémoire de `capture/` et `attribution/` (pas de lecture polling de `storage::events` —
+  trop tardif/indirect pour du temps réel). Ajoute un canal interne (`std::sync::mpsc` ou
+  `tokio::sync::mpsc` selon ce qui s'intègre le mieux avec le reste, à trancher par
+  l'implémentation) que `capture::CaptureSubsystem` et `attribution::AttributionSubsystem`
+  utilisent pour publier chaque événement retenu vers `correlation/`, en plus de leur
+  écriture `storage::events` existante (ne remplace pas la persistance brute déjà en place,
+  s'ajoute en parallèle) — MODIFICATION MINIME de ces 2 domaines déjà durcis (juste un envoi
+  sur un channel supplémentaire, pas de changement de logique interne).
+- **Tests (5.5)** : fixtures combinant capture+attribution dans des ordres et délais variés
+  (attribution avant capture, capture avant attribution, capture seul jamais suivi
+  d'attribution avant expiration de fenêtre, etc.), vérifie la visibilité assignée et
+  l'absence de doublon.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

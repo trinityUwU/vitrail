@@ -10,3 +10,7 @@ pub use subsystem::CaptureSubsystem;
 
 #[cfg(test)]
 pub use subsystem::FakeCaptureSubsystem;
+
+/// Contrat public du domaine, consommé par EPIC 5 (corrélation) — même principe que
+/// `attribution::{AttributionEvent, FiveTuple}` (`attribution/mod.rs`).
+pub use events::CapturedPacket;

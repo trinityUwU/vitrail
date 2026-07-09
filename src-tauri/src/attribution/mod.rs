@@ -20,7 +20,7 @@ mod subsystem;
 mod tests;
 
 #[allow(unused_imports)] // contrat public du domaine, consommé par EPIC 5 (corrélation)
-pub use server::{AttributionEvent, FiveTuple};
+pub use server::{normalize_ip, AttributionEvent, FiveTuple};
 pub use subsystem::AttributionSubsystem;
 
 #[cfg(test)]

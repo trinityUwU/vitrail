@@ -65,7 +65,13 @@ src-tauri/                  — backend Tauri (Rust)
       events.rs                   — CapturedPacket, persistance JSONL 600 (capture_events.jsonl)
     decryption/mod.rs          — stub EPIC 4 : orchestration PolarProxy, fail-open (non implémenté)
     keylog/mod.rs               — stub EPIC 3 : pipeline SSLKEYLOGFILE (non implémenté)
-    correlation/mod.rs          — stub EPIC 5 : fusion des sources en timeline (non implémenté)
+    correlation/                — EPIC 5 : moteur de fusion réel (livré, audité)
+      mod.rs                     — déclaration du sous-module, CorrelationSender exposé
+      channel.rs                  — canal mpsc try_send non-bloquant depuis capture/attribution
+      visibility.rs                 — mapping sources → FlowVisibility (16 combinaisons testées)
+      builder.rs                     — assemble un Flow complet à partir des fragments fusionnés
+      engine.rs                       — buffer HashMap<FiveTuple, PendingFlow>, fenêtre 5s,
+                                         persiste (storage::flows) + émet (vitrail://flow)
     storage/                     — EPIC 6 : SQLite WAL réel (livré, audité)
       mod.rs / connection.rs      — StorageHandle (Arc<Mutex<Connection>>), vitrail.db 600
                                      pré-créé (pas de TOCTOU), WAL, tauri::State
@@ -75,9 +81,11 @@ src-tauri/                  — backend Tauri (Rust)
       retention.rs                     — purge_data_before/purge_logs, DELETE+VACUUM
                                           sous verrous séparés (contention limitée)
       sessions.rs                       — list_sessions/get_session_detail/delete_session
-    src-tauri/migrations/0001_init.sql — schéma : system_events/capture_events/
-      attribution_state (+ index timestamp/pid), flows/processes vides, flows_fts (FTS5,
-      non alimentée, branchement prévu EPIC 5)
+      flows.rs                           — insert_flow/list_flows/get_flow/search_flows (FTS5)
+    src-tauri/migrations/0001_init.sql — schéma initial : system_events/capture_events/
+      attribution_state (+ index timestamp/pid), flows/processes vides, flows_fts (FTS5)
+    src-tauri/migrations/0002_flows_detail.sql — complète flows, recrée flows_fts (colonne
+      process) — les deux alimentées pour de vrai depuis EPIC 5
     killswitch/                   — EPIC 7 : squelette d'orchestration réel (livré, audité)
       mod.rs                       — KillSwitchState partagé, API publique, snapshot pré-activation
       subsystem.rs                  — trait Subsystem + StubSubsystem (CA/PolarProxy/attribution/
@@ -170,7 +178,12 @@ src/                        — frontend React/TypeScript (Vite)
 - **EPIC 6 (storage)** : réel, livré et audité — `rusqlite` bundled, migre les 3 JSONL
   provisoires EPIC 7/2/1 vers de vraies tables via `storage::`, aucun accès SQLite en
   dehors du domaine. `purge_logs`/`purge_data`/`get_session_detail`/`delete_session`/
-  `list_sessions` réels. `flows`/`processes`/`flows_fts` créées vides, alimentation EPIC 5.
-- **EPICs 3,4,5 (keylog/décryptage/corrélation réels)** :
+  `list_sessions` réels.
+- **EPIC 5 (corrélation)** : réel, livré et audité — fusion capture+attribution par 5-tuple
+  (IP normalisée via `std::net::IpAddr`, fix audit IPv6), fenêtre 5s, visibilité `Meta`/
+  `Attrib` réelle (`Fully`/`Unknown` prêts pour EPIC 3/4). `flows`/`flows_fts` alimentées
+  pour de vrai, `commands/flows.rs` sert de vraies données, `vitrail://flow` remplace
+  l'émetteur factice EPIC 8.4 sans changement frontend.
+- **EPICs 3,4 (keylog/décryptage réels)** :
   non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité),
   branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant.

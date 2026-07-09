@@ -7,11 +7,18 @@ use rusqlite::{params, Connection};
 use super::connection::now_unix;
 use super::error::StorageError;
 
-const MIGRATIONS: &[(i64, &str, &str)] = &[(
-    1,
-    "0001_init",
-    include_str!("../../migrations/0001_init.sql"),
-)];
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (
+        1,
+        "0001_init",
+        include_str!("../../migrations/0001_init.sql"),
+    ),
+    (
+        2,
+        "0002_flows_detail",
+        include_str!("../../migrations/0002_flows_detail.sql"),
+    ),
+];
 
 pub(super) fn apply_migrations(conn: &Connection) -> Result<(), StorageError> {
     conn.execute_batch(

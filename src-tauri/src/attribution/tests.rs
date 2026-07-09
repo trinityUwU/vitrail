@@ -81,8 +81,13 @@ async fn start_test_server() -> (TestServer, UiClient<Channel>) {
     let _ = std::fs::remove_file(&socket_path);
     let cache = Arc::new(ProcessCache::new());
 
-    let handle = server::start(socket_path.clone(), cache.clone(), Box::new(|| {}))
-        .expect("démarrage serveur test échoué");
+    let handle = server::start(
+        socket_path.clone(),
+        cache.clone(),
+        crate::correlation::channel().0,
+        Box::new(|| {}),
+    )
+    .expect("démarrage serveur test échoué");
     let client = connect_client(socket_path.clone()).await;
 
     (

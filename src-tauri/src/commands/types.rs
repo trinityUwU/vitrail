@@ -8,17 +8,15 @@ use serde::{Deserialize, Serialize};
 /// contrat IPC existant (`#[tauri::command]` dans `commands/killswitch.rs`). `SubsystemStatus`
 /// n'est jamais nommé directement via ce chemin (seulement imbriqué dans `SystemStatus`), d'où
 /// l'allow ciblé plutôt qu'un faux import mort.
+///
+/// `Flow`/`FlowVisibility`/`HttpHeader`/`CertificateInfo`/`CorrelationSource` suivent le même
+/// principe depuis EPIC 5 : possédés par `crate::shared` (produits par `correlation/`, aussi
+/// consommés par `storage/`), ré-exportés ici tels quels.
 #[allow(unused_imports)]
-pub use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum FlowVisibility {
-    Fully,
-    Meta,
-    Attrib,
-    Unknown,
-}
+pub use crate::shared::{
+    CertificateInfo, CorrelationSource, Flow, FlowVisibility, HttpHeader, SubsystemStatus,
+    SystemStatus, TeardownReport,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,57 +43,6 @@ pub struct DestinationInfo {
     pub first_seen: String,
     pub last_seen: String,
     pub tag: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HttpHeader {
-    pub name: String,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CertificateInfo {
-    pub issuer: String,
-    pub subject: String,
-    pub valid_from: String,
-    pub valid_to: String,
-    pub fingerprint_sha256: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CorrelationSource {
-    pub name: String,
-    pub status: String,
-    pub detail: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Flow {
-    pub id: String,
-    pub timestamp: String,
-    pub process: String,
-    pub destination: String,
-    pub ip: String,
-    pub port: u16,
-    pub protocol: String,
-    pub size_bytes: u64,
-    pub duration_ms: u64,
-    pub visibility: FlowVisibility,
-    pub method: Option<String>,
-    pub path: Option<String>,
-    pub status: Option<u16>,
-    pub source_ip: String,
-    pub source_port: u16,
-    pub request_headers: Vec<HttpHeader>,
-    pub response_headers: Vec<HttpHeader>,
-    pub body_preview: Option<String>,
-    pub content_type: Option<String>,
-    pub certificate: Option<CertificateInfo>,
-    pub sources: Vec<CorrelationSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

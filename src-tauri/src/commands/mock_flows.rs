@@ -330,14 +330,3 @@ pub fn flows() -> Vec<Flow> {
         .map(|(i, seed)| build_flow(seed, i as u16, &dests))
         .collect()
 }
-
-/// Émetteur factice temporaire (EPIC 8.4) : simule un flux "live" en recyclant les
-/// templates de démo. À supprimer quand `correlation::stream_flows()` émettra les
-/// événements réels vers le frontend.
-pub(crate) fn mock_live_flow(seq: u64) -> Flow {
-    let templates = flows();
-    let idx = (seq as usize) % templates.len();
-    let mut flow = templates[idx].clone();
-    flow.id = format!("live-{seq}");
-    flow
-}

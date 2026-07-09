@@ -70,8 +70,10 @@ impl KillSwitchState {
     /// Ouvre la connexion storage réelle (fichier XDG, EPIC 6) — fallback en mémoire loggé si
     /// l'ouverture échoue, jamais de panic au démarrage de l'app pour une défaillance de
     /// persistance (même philosophie que les erreurs de journalisation dans le reste du
-    /// domaine : dégradé et visible, pas fatal).
-    pub fn new() -> Self {
+    /// domaine : dégradé et visible, pas fatal). `correlation` (EPIC 5) est cloné dans
+    /// `CaptureSubsystem`/`AttributionSubsystem` : chacun publie ses événements retenus vers
+    /// `correlation/` en plus de sa persistance `storage::` existante.
+    pub fn new(correlation: crate::correlation::CorrelationSender) -> Self {
         let storage = StorageHandle::open_default().unwrap_or_else(|error| {
             tracing::error!(
                 error = %error,
@@ -83,8 +85,8 @@ impl KillSwitchState {
 
         Self::with_backend(
             Box::new(SystemNftablesBackend),
-            Box::new(CaptureSubsystem::new(storage.clone())),
-            Box::new(AttributionSubsystem::new(storage.clone())),
+            Box::new(CaptureSubsystem::new(storage.clone(), correlation.clone())),
+            Box::new(AttributionSubsystem::new(storage.clone(), correlation)),
             storage,
         )
     }
@@ -234,8 +236,12 @@ impl KillSwitchState {
 }
 
 impl Default for KillSwitchState {
+    /// `Default` ne peut pas prendre de paramètre : construit un canal de corrélation
+    /// jetable (récepteur immédiatement abandonné, `correlation/` reste inactive) — jamais
+    /// utilisé par `lib.rs` (qui appelle `new(correlation)` avec le vrai récepteur), présent
+    /// uniquement pour satisfaire l'idiome Rust `Default`/`new()` sans argument caché.
     fn default() -> Self {
-        Self::new()
+        Self::new(crate::correlation::channel().0)
     }
 }
 
