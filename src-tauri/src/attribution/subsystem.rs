@@ -248,15 +248,14 @@ impl Subsystem for FakeAttributionSubsystem {
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::Ordering as AtomicOrdering;
-    use std::sync::{Arc, Mutex as StdMutex};
+    use std::sync::Arc;
 
     use super::*;
     use crate::attribution::daemon_config::FakeDaemonConfigurator;
 
-    // `XDG_DATA_HOME`/`XDG_RUNTIME_DIR` sont globales au process : verrou nécessaire pour que
-    // les deux tests ci-dessous (parallélisés par défaut par `cargo test`) ne se marchent pas
-    // dessus (même précaution que `desktop_resolver::tests::ENV_GUARD`).
-    static ENV_GUARD: StdMutex<()> = StdMutex::new(());
+    // `XDG_DATA_HOME`/`XDG_RUNTIME_DIR` sont globales au process : verrou partagé nécessaire
+    // (`shared::ENV_GUARD`) pour qu'aucun test d'aucun module ne les modifie en même temps.
+    use crate::shared::ENV_GUARD;
 
     // `Box<dyn DaemonConfigurator>` exige la possession — passer un `Arc` clonable permet de
     // garder une référence côté test pour inspecter `set_calls` après `start()`/`stop()`.

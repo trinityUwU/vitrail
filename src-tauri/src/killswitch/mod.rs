@@ -28,6 +28,7 @@ pub use subsystem::Subsystem;
 
 use crate::attribution::AttributionSubsystem;
 use crate::capture::CaptureSubsystem;
+use crate::keylog::KeylogSubsystem;
 use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
 use crate::storage::StorageHandle;
 
@@ -54,7 +55,7 @@ struct Inner {
     polarproxy: StubSubsystem,
     attribution: Box<dyn Subsystem>,
     capture: Box<dyn Subsystem>,
-    keylog: StubSubsystem,
+    keylog: Box<dyn Subsystem>,
     pre_activation_snapshot: Option<SystemSnapshot>,
     active: bool,
     last_verification: Option<TeardownReport>,
@@ -86,7 +87,11 @@ impl KillSwitchState {
         Self::with_backend(
             Box::new(SystemNftablesBackend),
             Box::new(CaptureSubsystem::new(storage.clone(), correlation.clone())),
-            Box::new(AttributionSubsystem::new(storage.clone(), correlation)),
+            Box::new(AttributionSubsystem::new(
+                storage.clone(),
+                correlation.clone(),
+            )),
+            Box::new(KeylogSubsystem::new(storage.clone(), correlation)),
             storage,
         )
     }
@@ -102,16 +107,18 @@ impl KillSwitchState {
             .clone()
     }
 
-    /// Constructeur pour les tests (7.6/EPIC 2/EPIC 1) : jamais de `SystemNftablesBackend` ni
-    /// de vrais `CaptureSubsystem`/`AttributionSubsystem` en test — injecter des variantes en
-    /// mémoire (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`,
-    /// `attribution::FakeAttributionSubsystem`) garantit qu'aucun `pkexec` ni aucun process
-    /// privilégié réel n'est déclenché par un test. `storage` doit être une connexion en
-    /// mémoire (`StorageHandle::open_in_memory()`) en test, jamais le vrai fichier.
+    /// Constructeur pour les tests (7.6/EPIC 2/EPIC 1/EPIC 3) : jamais de `SystemNftablesBackend`
+    /// ni de vrais `CaptureSubsystem`/`AttributionSubsystem`/`KeylogSubsystem` en test —
+    /// injecter des variantes en mémoire (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`,
+    /// `attribution::FakeAttributionSubsystem`, `keylog::FakeKeylogSubsystem`) garantit qu'aucun
+    /// `pkexec` ni aucun process privilégié réel n'est déclenché par un test. `storage` doit être
+    /// une connexion en mémoire (`StorageHandle::open_in_memory()`) en test, jamais le vrai
+    /// fichier.
     pub fn with_backend(
         nftables: Box<dyn NftablesBackend>,
         capture: Box<dyn Subsystem>,
         attribution: Box<dyn Subsystem>,
+        keylog: Box<dyn Subsystem>,
         storage: StorageHandle,
     ) -> Self {
         Self {
@@ -121,7 +128,7 @@ impl KillSwitchState {
                 polarproxy: StubSubsystem::new("polarproxy"),
                 attribution,
                 capture,
-                keylog: StubSubsystem::new("keylog"),
+                keylog,
                 pre_activation_snapshot: None,
                 active: false,
                 last_verification: None,
@@ -256,7 +263,7 @@ fn build_subsystem_refs(inner: &Inner) -> Vec<&dyn Subsystem> {
         &inner.polarproxy,
         &*inner.attribution,
         &*inner.capture,
-        &inner.keylog,
+        &*inner.keylog,
     ]
 }
 
@@ -269,7 +276,7 @@ fn build_steps(inner: &Inner) -> Vec<Step<'_>> {
         Step::Subsystem(&inner.polarproxy),
         Step::Subsystem(&*inner.attribution),
         Step::Subsystem(&*inner.capture),
-        Step::Subsystem(&inner.keylog),
+        Step::Subsystem(&*inner.keylog),
     ]
 }
 

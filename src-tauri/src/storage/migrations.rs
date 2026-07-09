@@ -18,6 +18,16 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "0002_flows_detail",
         include_str!("../../migrations/0002_flows_detail.sql"),
     ),
+    (
+        3,
+        "0003_keylog_apps",
+        include_str!("../../migrations/0003_keylog_apps.sql"),
+    ),
+    (
+        4,
+        "0004_flows_five_tuple_index",
+        include_str!("../../migrations/0004_flows_five_tuple_index.sql"),
+    ),
 ];
 
 pub(super) fn apply_migrations(conn: &Connection) -> Result<(), StorageError> {

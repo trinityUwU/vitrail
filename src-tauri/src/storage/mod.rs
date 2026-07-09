@@ -11,6 +11,7 @@ mod migrations;
 pub mod attribution;
 pub mod events;
 pub mod flows;
+pub mod keylog;
 pub mod retention;
 pub mod sessions;
 

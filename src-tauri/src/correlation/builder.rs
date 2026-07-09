@@ -6,7 +6,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::attribution::{AttributionEvent, FiveTuple};
 use crate::capture::CapturedPacket;
-use crate::shared::{CorrelationSource, Flow};
+use crate::keylog::DecryptedFragment;
+use crate::shared::{CertificateInfo, CorrelationSource, Flow, HttpHeader};
 
 use super::visibility::determine_visibility;
 
@@ -18,6 +19,10 @@ pub struct PendingFlow {
     pub five_tuple: FiveTuple,
     pub capture: Option<CapturedPacket>,
     pub attribution: Option<AttributionEvent>,
+    /// EPIC 3 (PLAN.md §6octies) : fragment déchiffré via `tshark`/SSLKEYLOGFILE — première
+    /// source de contenu réelle (`request_headers`/`response_headers`/`body_preview`/
+    /// `content_type`/`certificate` restaient vides jusqu'ici, cf. doc de module d'origine).
+    pub decryption: Option<DecryptedFragment>,
     pub first_seen: Instant,
 }
 
@@ -27,7 +32,55 @@ impl PendingFlow {
             five_tuple,
             capture: None,
             attribution: None,
+            decryption: None,
             first_seen: Instant::now(),
+        }
+    }
+}
+
+/// Contenu extrait d'un fragment déchiffré (EPIC 3) — regroupe les champs
+/// method/path/status/headers/body/certificat pour éviter de répéter cinq fois
+/// `pending.decryption.as_ref().and_then(...)` dans `build_flow`. Réutilisé tel quel par
+/// `correlation::update` (fix audit 5.2) pour enrichir a posteriori un flow déjà émis avec un
+/// fragment déchiffré tardif, sans dupliquer cette extraction.
+pub(super) struct DecryptionContent {
+    pub host: Option<String>,
+    pub method: Option<String>,
+    pub path: Option<String>,
+    pub status: Option<u16>,
+    pub request_headers: Vec<HttpHeader>,
+    pub response_headers: Vec<HttpHeader>,
+    pub body_preview: Option<String>,
+    pub content_type: Option<String>,
+    pub certificate: Option<CertificateInfo>,
+}
+
+impl DecryptionContent {
+    pub(super) fn from_fragment(fragment: &DecryptedFragment) -> Self {
+        Self {
+            host: fragment.host.clone(),
+            method: fragment.method.clone(),
+            path: fragment.path.clone(),
+            status: fragment.status,
+            request_headers: fragment.request_headers.clone(),
+            response_headers: fragment.response_headers.clone(),
+            body_preview: fragment.body_preview.clone(),
+            content_type: fragment.content_type.clone(),
+            certificate: fragment.certificate.clone(),
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            host: None,
+            method: None,
+            path: None,
+            status: None,
+            request_headers: Vec::new(),
+            response_headers: Vec::new(),
+            body_preview: None,
+            content_type: None,
+            certificate: None,
         }
     }
 }
@@ -35,13 +88,21 @@ impl PendingFlow {
 pub fn build_flow(pending: &PendingFlow, sequence: u64) -> Flow {
     let has_capture = pending.capture.is_some();
     let has_attribution = pending.attribution.is_some();
-    let visibility = determine_visibility(has_capture, has_attribution, false, false);
+    let has_decryption = pending.decryption.is_some();
+    // 4ᵉ paramètre = `keylog` (pas `decryption`/EPIC 4-PolarProxy) : cette passe alimente le
+    // pipeline SSLKEYLOGFILE, décision explicitée au rapport de livraison EPIC 3.
+    let visibility = determine_visibility(has_capture, has_attribution, false, has_decryption);
+    let content = pending
+        .decryption
+        .as_ref()
+        .map(DecryptionContent::from_fragment)
+        .unwrap_or_else(DecryptionContent::empty);
 
     Flow {
         id: flow_id(&pending.five_tuple, sequence),
         timestamp: timestamp_hms(),
         process: process_name(pending),
-        destination: destination(pending),
+        destination: destination(pending, &content),
         ip: pending.five_tuple.dst_ip.clone(),
         port: pending.five_tuple.dst_port,
         protocol: protocol(pending),
@@ -50,22 +111,22 @@ pub fn build_flow(pending: &PendingFlow, sequence: u64) -> Flow {
             .as_ref()
             .map(|c| c.bytes as u64)
             .unwrap_or(0),
-        // Non mesurable avec seulement capture+attribution (pas de timing requête/réponse
-        // tant que decryption/keylog n'apportent pas un vrai début/fin d'échange) — décision
-        // non explicite dans PLAN.md, cf. rapport EPIC 5.
+        // Non mesurable avec capture+attribution+keylog (pas de timing requête/réponse tant que
+        // decryption/EPIC 4 n'apporte pas un vrai début/fin d'échange côté proxy) — décision non
+        // explicite dans PLAN.md, cf. rapport EPIC 5/EPIC 3.
         duration_ms: 0,
         visibility,
-        method: None,
-        path: None,
-        status: None,
+        method: content.method,
+        path: content.path,
+        status: content.status,
         source_ip: pending.five_tuple.src_ip.clone(),
         source_port: pending.five_tuple.src_port,
-        request_headers: Vec::new(),
-        response_headers: Vec::new(),
-        body_preview: None,
-        content_type: None,
-        certificate: None,
-        sources: build_sources(has_capture, has_attribution),
+        request_headers: content.request_headers,
+        response_headers: content.response_headers,
+        body_preview: content.body_preview,
+        content_type: content.content_type,
+        certificate: content.certificate,
+        sources: build_sources(has_capture, has_attribution, has_decryption),
     }
 }
 
@@ -77,8 +138,12 @@ fn process_name(pending: &PendingFlow) -> String {
         .unwrap_or_else(|| UNKNOWN_PROCESS.to_string())
 }
 
-/// SNI (capture) si présent — sinon l'IP de destination, toujours disponible via le 5-tuple.
-fn destination(pending: &PendingFlow) -> String {
+/// Hôte déchiffré (keylog) en priorité si présent — sinon SNI (capture), sinon l'IP de
+/// destination, toujours disponible via le 5-tuple.
+fn destination(pending: &PendingFlow, content: &DecryptionContent) -> String {
+    if let Some(host) = &content.host {
+        return host.clone();
+    }
     pending
         .capture
         .as_ref()
@@ -98,7 +163,11 @@ fn protocol(pending: &PendingFlow) -> String {
     pending.five_tuple.protocol.clone()
 }
 
-fn build_sources(has_capture: bool, has_attribution: bool) -> Vec<CorrelationSource> {
+fn build_sources(
+    has_capture: bool,
+    has_attribution: bool,
+    has_decryption: bool,
+) -> Vec<CorrelationSource> {
     vec![
         CorrelationSource {
             name: "Capture".into(),
@@ -127,8 +196,13 @@ fn build_sources(has_capture: bool, has_attribution: bool) -> Vec<CorrelationSou
         },
         CorrelationSource {
             name: "Keylog".into(),
-            status: "absent".into(),
-            detail: "EPIC 3 non livré".into(),
+            status: if has_decryption { "ok" } else { "absent" }.into(),
+            detail: if has_decryption {
+                "Fragment déchiffré reçu via tshark (SSLKEYLOGFILE)"
+            } else {
+                "Aucun fragment déchiffré dans la fenêtre de corrélation"
+            }
+            .into(),
         },
     ]
 }

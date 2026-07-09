@@ -23,5 +23,10 @@ mod tests;
 pub use server::{normalize_ip, AttributionEvent, FiveTuple};
 pub use subsystem::AttributionSubsystem;
 
+/// Réutilisé par `keylog::app_injection` (EPIC 3, PLAN.md §6octies) pour localiser le
+/// `.desktop` à surcharger — même heuristique que `resolve_app_name` (affichage), extraite en
+/// fonction commune plutôt que dupliquée (cf. `desktop_resolver.rs`).
+pub use desktop_resolver::find_desktop_file;
+
 #[cfg(test)]
 pub use subsystem::FakeAttributionSubsystem;

@@ -64,14 +64,25 @@ src-tauri/                  — backend Tauri (Rust)
                                     threads lecteurs stdout+stderr (diagnostics relayés tracing)
       events.rs                   — CapturedPacket, persistance JSONL 600 (capture_events.jsonl)
     decryption/mod.rs          — stub EPIC 4 : orchestration PolarProxy, fail-open (non implémenté)
-    keylog/mod.rs               — stub EPIC 3 : pipeline SSLKEYLOGFILE (non implémenté)
-    correlation/                — EPIC 5 : moteur de fusion réel (livré, audité)
+    keylog/                      — EPIC 3 : pipeline SSLKEYLOGFILE réel (livré, audité)
+      mod.rs                      — déclaration du sous-module, DecryptedFragment exposé
+      keyfile.rs                   — tls_keylog.log 600 (créé/tronqué à chaque activation)
+      detection.rs                  — tshark -D, détection honnête (pas de supposition)
+      app_injection.rs               — wrapper + copie .desktop utilisateur, snapshot/restore
+      tshark_process.rs               — TsharkBackend (réel + fake test), -T ek JSON Lines
+      parser.rs                        — parsing -T ek → DecryptedFragment (2Ko body_preview)
+      subsystem.rs                      — KeylogSubsystem (trait Subsystem)
+    correlation/                — EPIC 5+3 : moteur de fusion réel (livré, audité 2x)
       mod.rs                     — déclaration du sous-module, CorrelationSender exposé
-      channel.rs                  — canal mpsc try_send non-bloquant depuis capture/attribution
+      channel.rs                  — canal mpsc try_send, événements Capture/Attribution/
+                                     Decryption (EPIC 3)
       visibility.rs                 — mapping sources → FlowVisibility (16 combinaisons testées)
-      builder.rs                     — assemble un Flow complet à partir des fragments fusionnés
+      builder.rs                     — assemble un Flow (capture/attribution/decryption)
       engine.rs                       — buffer HashMap<FiveTuple, PendingFlow>, fenêtre 5s,
                                          persiste (storage::flows) + émet (vitrail://flow)
+      engine_tests.rs                  — tests de fusion, y compris decryption tardive
+      update.rs                         — enrichit un Flow déjà émis (fix doublon 5.2,
+                                           fragment déchiffré arrivé après fermeture)
     storage/                     — EPIC 6 : SQLite WAL réel (livré, audité)
       mod.rs / connection.rs      — StorageHandle (Arc<Mutex<Connection>>), vitrail.db 600
                                      pré-créé (pas de TOCTOU), WAL, tauri::State
@@ -81,7 +92,9 @@ src-tauri/                  — backend Tauri (Rust)
       retention.rs                     — purge_data_before/purge_logs, DELETE+VACUUM
                                           sous verrous séparés (contention limitée)
       sessions.rs                       — list_sessions/get_session_detail/delete_session
-      flows.rs                           — insert_flow/list_flows/get_flow/search_flows (FTS5)
+      flows.rs                           — insert_flow/list_flows/get_flow/search_flows (FTS5),
+                                            find_recent_by_five_tuple/update_flow (EPIC 3)
+      keylog.rs                           — list_apps/add_app/remove_app (EPIC 3)
     src-tauri/migrations/0001_init.sql — schéma initial : system_events/capture_events/
       attribution_state (+ index timestamp/pid), flows/processes vides, flows_fts (FTS5)
     src-tauri/migrations/0002_flows_detail.sql — complète flows, recrée flows_fts (colonne
@@ -184,6 +197,11 @@ src/                        — frontend React/TypeScript (Vite)
   `Attrib` réelle (`Fully`/`Unknown` prêts pour EPIC 3/4). `flows`/`flows_fts` alimentées
   pour de vrai, `commands/flows.rs` sert de vraies données, `vitrail://flow` remplace
   l'émetteur factice EPIC 8.4 sans changement frontend.
-- **EPICs 3,4 (keylog/décryptage réels)** :
-  non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité),
-  branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant.
+- **EPIC 3 (keylog)** : réel, livré et audité — `tshark` en sous-processus (non réinventé),
+  détection honnête, injection `.desktop` réversible (snapshot/restore), première source de
+  contenu réelle branchée dans `correlation/` (`Fully` désormais atteignable). Fix doublon
+  5.2 (enrichissement a posteriori via `storage::flows::update_flow`).
+- **EPIC 4 (décryptage actif PolarProxy)** :
+  non commencé — module stub uniquement (`mod.rs` = un commentaire de responsabilité),
+  branché dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant. Dernier de
+  l'ordre décidé, le plus risqué (CA système, MITM, fail-open sur certificate pinning).

@@ -98,3 +98,15 @@ pub struct Flow {
     pub certificate: Option<CertificateInfo>,
     pub sources: Vec<CorrelationSource>,
 }
+
+/// Verrou de test partagé pour tout module dont les tests manipulent des variables
+/// d'environnement globales au process (`XDG_DATA_HOME`/`XDG_DATA_DIRS`/`XDG_RUNTIME_DIR`).
+/// Chaque module ayant historiquement défini son propre `static ENV_GUARD` local
+/// (`attribution::desktop_resolver`, `attribution::subsystem`), deux tests de modules
+/// DIFFÉRENTS pouvaient modifier ces variables en même temps sans exclusion mutuelle réelle
+/// (chacun protégé par un mutex distinct) — flaky par construction dès que `cargo test`
+/// parallélise plusieurs modules qui les touchent (constaté à l'ajout des tests `keylog::*` en
+/// EPIC 3). Centralisé ici : tout module de test touchant ces variables doit utiliser CE verrou,
+/// jamais en redéfinir un local.
+#[cfg(test)]
+pub(crate) static ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());

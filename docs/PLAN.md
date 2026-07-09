@@ -437,6 +437,67 @@ et accueillir décryptage/keylog plus tard sans réécriture.
   d'attribution avant expiration de fenêtre, etc.), vérifie la visibilité assignée et
   l'absence de doublon.
 
+## 6octies. EPIC 3 — Décryptage TLS coopératif SSLKEYLOGFILE (décidé 2026-07-09)
+
+Cinquième domaine réel, avant-dernier de l'ordre décidé. Première source de CONTENU
+déchiffré réelle — `correlation/visibility.rs` (EPIC 5) a déjà été construit pour accepter
+un signal `decryption`/`keylog` sans réécriture, cette passe l'alimente pour de vrai.
+
+- **Non-réinvention assumée** : `keylog/` ne fait AUCUN parsing TLS/HTTP maison — délègue
+  entièrement le déchiffrement et la reconstruction HTTP à `tshark` en sous-processus
+  (dissecteurs Wireshark, `-o tls.keylog_file:<chemin>`, sortie `-T ek` = un objet JSON par
+  paquet/PDU sur stdout, facile à streamer ligne par ligne comme le fait déjà
+  `vitrail-capture-helper`). Pas de re-parsing manuel de sessions TLS (story 3.3 devient donc
+  : lire le flux JSON déjà corrélé par tshark, pas suivre le fichier de clés à la main).
+- **Dépendance système `tshark` — divergence de privilège assumée** : contrairement à
+  `vitrail-capture-helper` (setcap propre à Vitrail), Vitrail ne gère PAS l'élévation de
+  `tshark` lui-même — il s'appuie sur le mécanisme standard déjà en place sur la plupart des
+  distros pour Wireshark (`dumpcap` avec capacités via le paquet système, groupe `wireshark`).
+  Détection (3.1/3.5) : `which tshark` + test réel `tshark -D` (liste les interfaces sans
+  capturer) pour vérifier une vraie permission de capture, pas une supposition. État dégradé
+  explicite si `tshark` absent ou sans permission — jamais un échec silencieux qui ferait
+  croire à une couverture keylog qui n'existe pas.
+- **Fichier de clés (3.1)** : `$XDG_DATA_HOME/vitrail/tls_keylog.log`, créé en 600 dès
+  l'ouverture (même pattern `OpenOptions` déjà utilisé partout dans le projet), TRONQUÉ à
+  chaque activation (jamais d'accumulation de clés entre sessions — cohérent avec la
+  discipline de réversibilité/vie privée déjà posée pour les autres domaines).
+- **Injection apps ciblées (3.2)** : réutilise EXACTEMENT les commandes IPC déjà existantes
+  `list_keylog_apps`/`add_keylog_app`/`remove_keylog_app` (`commands/settings.rs`, jusqu'ici
+  mockées en mémoire) — persistées pour de vrai via une nouvelle API `storage::keylog`.
+  Pour chaque app de la liste avec un `.desktop` connu : un script wrapper
+  `$XDG_DATA_HOME/vitrail/keylog-wrapper.sh` (pose `SSLKEYLOGFILE`, `exec "$@"`) + une
+  **copie utilisateur** du `.desktop` dans `$XDG_DATA_HOME/applications/<basename>.desktop`
+  (mécanisme XDG standard de surcharge utilisateur, prioritaire sur le `.desktop` système
+  SANS jamais le toucher) avec `Exec=` réécrit pour passer par le wrapper. Snapshot de tout
+  fichier de surcharge PRÉEXISTANT avant modification (même discipline pré/post que le kill
+  switch) pour restaurer l'état exact à la désactivation — jamais une simple suppression
+  aveugle qui effacerait une personnalisation de l'utilisateur non liée à Vitrail. Sessions
+  shell : pas d'injection possible dans un shell déjà lancé — limite acceptée et déjà
+  documentée (`UI_SPEC.md` écran Paramètres > Keylog, story 3.5 "pas de faux sentiment de
+  couverture totale"), aucune nouvelle commande IPC nécessaire pour ce sous-cas.
+- **Process tshark live (3.3/3.4)** : un seul process `tshark` (pas un par interface — accepte
+  plusieurs `-i` en une seule invocation), lancé au `start()` du `Subsystem`, arrêté
+  proprement (`SIGTERM`/join, même pattern que `vitrail-capture-helper`) au `stop()`. Parse
+  chaque ligne JSON (`-T ek`) en un fragment `DecryptedFragment` (5-tuple, host/method/path/
+  status si HTTP présent, headers, `body_preview` tronqué à 2 Ko — même discipline de taille
+  que le reste du projet, certificat si TLS présent) et l'envoie vers `correlation/` via un
+  nouveau canal (même pattern `mpsc`/`try_send` non-bloquant que `capture/`/`attribution/`
+  en EPIC 5, AUCUN risque d'introduire un blocage dans le chemin `AskRule` d'attribution
+  puisque ce canal est totalement indépendant).
+- **Extension de `correlation/` (EPIC 5)** : `CorrelationEvent` gagne une variante
+  `Decryption(DecryptedFragment)`, `PendingFlow`/`engine.rs` fusionnent ce fragment par
+  5-tuple exactement comme les 2 sources existantes (même fenêtre 5s), `builder.rs` remplit
+  enfin les champs `request_headers`/`response_headers`/`body_preview`/`content_type`/
+  `certificate` du `Flow` quand ce fragment est présent, `visibility.rs` reçoit enfin
+  `decryption: true` pour de vrai (le paramètre existait déjà, prêt depuis EPIC 5) → `Fully`.
+  MODIFICATION CIBLÉE de `correlation/` déjà auditée deux fois — étend sans réécrire.
+- **`KeylogSubsystem`** implémente le trait `Subsystem`, remplace le stub "keylog" dans
+  `killswitch/subsystem.rs` sans autre modification de l'orchestration (validé 4 fois :
+  EPIC 7 → 2 → 1 → 5, même garantie).
+- **Tests** : mock du process `tshark` (trait `TsharkBackend` ou équivalent, comme
+  `NftablesBackend`/`FakeCaptureSubsystem` déjà dans le projet) — les tests ne doivent jamais
+  invoquer le vrai `tshark` (absent sur certaines machines de dev/CI, y compris celle-ci).
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

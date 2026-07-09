@@ -10,7 +10,8 @@ le backlog non structuré.
       pid/start_time, AskRule non-bloquant + panic guard de restauration
 - [x] EPIC 2 — Capture réseau brute — pnet + tls-parser, vitrail-capture-helper (setcap
       cap_net_raw/cap_net_admin), CaptureSubsystem branché dans le kill switch
-- [ ] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE)
+- [x] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE) — tshark en sous-processus (non
+      réinventé), injection .desktop réversible, visibilité Fully réelle pour la première fois
 - [ ] EPIC 4 — Décryptage TLS actif (PolarProxy, fail-open)
 - [x] EPIC 5 — Moteur de corrélation — fusion capture+attribution par 5-tuple/fenêtre 5s,
       visibilité Meta/Attrib réelle (Fully/Unknown prêts pour EPIC 3/4), flows/flows_fts
@@ -38,7 +39,8 @@ le backlog non structuré.
 - [x] EPIC 1 (attribution processus) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 6 (storage SQLite) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 5 (corrélation timeline) livré, audité, corrigé — voir STATE.md.
-- [ ] EPIC 3 — Pipeline SSLKEYLOGFILE, prochain de l'ordre décidé.
+- [x] EPIC 3 (SSLKEYLOGFILE) livré, audité, corrigé — voir STATE.md.
+- [ ] EPIC 4 — PolarProxy (MITM fail-open), dernier de l'ordre décidé, le plus risqué.
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").

@@ -79,6 +79,50 @@ fn applications_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Cherche le fichier `.desktop` (chemin complet, pas seulement `Name=`) dont `Exec=`
+/// référence le basename de `exe_path` — réutilisé par `keylog::app_injection` (EPIC 3,
+/// PLAN.md §6octies) pour localiser le `.desktop` à surcharger avant l'injection
+/// `SSLKEYLOGFILE`. Même recherche que `resolve_app_name`, extraite ici plutôt que dupliquée
+/// pour ne jamais faire diverger les deux heuristiques.
+pub fn find_desktop_file(exe_path: &str) -> Option<PathBuf> {
+    let basename = Path::new(exe_path)
+        .file_name()?
+        .to_string_lossy()
+        .to_string();
+    if basename.is_empty() {
+        return None;
+    }
+    applications_dirs()
+        .into_iter()
+        .find_map(|dir| search_dir_for_path(&dir, &basename))
+}
+
+fn search_dir_for_path(dir: &Path, basename: &str) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
+            continue;
+        }
+        if desktop_file_exec_matches(&path, basename) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn desktop_file_exec_matches(path: &Path, basename: &str) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    content.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("Exec=")
+            .map(|exec| exec.contains(basename))
+            .unwrap_or(false)
+    })
+}
+
 fn search_dir(dir: &Path, basename: &str) -> Option<String> {
     let entries = fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {
@@ -115,12 +159,12 @@ fn check_desktop_file(path: &Path, basename: &str) -> Option<String> {
 mod tests {
     use super::*;
     use std::io::Write;
-    use std::sync::Mutex;
 
     // `XDG_DATA_DIRS`/`XDG_DATA_HOME` sont des variables d'environnement globales au process :
-    // sans ce verrou, les deux tests ci-dessous s'exécutant en parallèle (comportement par
-    // défaut de `cargo test`) pourraient se marcher dessus de façon non déterministe.
-    static ENV_GUARD: Mutex<()> = Mutex::new(());
+    // sans ce verrou partagé (`shared::ENV_GUARD`), des tests de modules différents s'exécutant
+    // en parallèle (comportement par défaut de `cargo test`) pourraient se marcher dessus de
+    // façon non déterministe.
+    use crate::shared::ENV_GUARD;
 
     #[test]
     fn fallback_sur_basename_si_aucun_desktop_ne_matche() {
@@ -153,6 +197,28 @@ mod tests {
         std::env::remove_var("XDG_DATA_HOME");
 
         assert_eq!(resolve_app_name("/usr/lib/firefox/firefox"), "Firefox");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn find_desktop_file_retourne_le_chemin_complet_du_fichier_matchant() {
+        let _guard = ENV_GUARD.lock().unwrap();
+        let tmp =
+            std::env::temp_dir().join(format!("vitrail-test-desktop3-{}", std::process::id()));
+        let apps_dir = tmp.join("applications");
+        std::fs::create_dir_all(&apps_dir).unwrap();
+        let desktop_path = apps_dir.join("firefox.desktop");
+        let mut file = std::fs::File::create(&desktop_path).unwrap();
+        writeln!(file, "[Desktop Entry]\nName=Firefox\nExec=firefox %u\n").unwrap();
+
+        std::env::set_var("XDG_DATA_DIRS", &tmp);
+        std::env::remove_var("XDG_DATA_HOME");
+
+        assert_eq!(
+            find_desktop_file("/usr/lib/firefox/firefox"),
+            Some(desktop_path)
+        );
+        assert_eq!(find_desktop_file("/usr/bin/totally-unknown"), None);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

@@ -10,14 +10,18 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 
 use crate::attribution::AttributionEvent;
 use crate::capture::CapturedPacket;
+use crate::keylog::DecryptedFragment;
 
 /// Capacité du canal — un débordement (rafale de connexions) dégrade seulement la
-/// corrélation temps réel, jamais la capture/l'attribution elles-mêmes.
+/// corrélation temps réel, jamais la capture/l'attribution/le keylog eux-mêmes.
 const CHANNEL_CAPACITY: usize = 1024;
 
 pub enum CorrelationEvent {
     Capture(CapturedPacket),
     Attribution(AttributionEvent),
+    /// EPIC 3 (PLAN.md §6octies) : fragment déchiffré produit par `tshark` (pipeline
+    /// SSLKEYLOGFILE) — publié en plus de `storage::events`, jamais à la place.
+    Decryption(DecryptedFragment),
 }
 
 #[derive(Clone)]
@@ -30,6 +34,10 @@ impl CorrelationSender {
 
     pub fn send_attribution(&self, event: AttributionEvent) {
         self.try_send_logged(CorrelationEvent::Attribution(event), "attribution");
+    }
+
+    pub fn send_decryption(&self, fragment: DecryptedFragment) {
+        self.try_send_logged(CorrelationEvent::Decryption(fragment), "keylog");
     }
 
     fn try_send_logged(&self, event: CorrelationEvent, origin: &'static str) {

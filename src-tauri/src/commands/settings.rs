@@ -293,35 +293,48 @@ fn format_unix_rfc3339(ts: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}T{h:02}:{min:02}:{s:02}Z")
 }
 
-const SEED_KEYLOG_APPS: [&str; 3] = [
-    "/usr/bin/google-chrome-stable",
-    "/usr/lib/firefox/firefox",
-    "/usr/share/code/code",
-];
-
-/// EPIC 3.5 remplacera ce mock par keylog::list_covered_apps() (config persistée).
+/// EPIC 3.5 : liste réelle depuis `storage::keylog` (remplace le mock en mémoire). Vide par
+/// défaut — décision non explicitement tranchée dans PLAN.md : les 3 apps mock du placeholder
+/// UI référençaient des chemins non vérifiés sur la machine réelle ; une liste vide honnête est
+/// préférable à une fausse impression de couverture pré-remplie (story 3.5, "pas de faux
+/// sentiment de couverture totale") — l'utilisateur ajoute lui-même ses apps.
 #[tauri::command]
-pub fn list_keylog_apps() -> Vec<String> {
-    SEED_KEYLOG_APPS.iter().map(|s| s.to_string()).collect()
+pub fn list_keylog_apps(storage: State<'_, StorageHandle>) -> Vec<String> {
+    list_keylog_apps_impl(&storage)
 }
 
-/// EPIC 3.5 remplacera ce mock par keylog::add_covered_app(path) (injection SSLKEYLOGFILE).
+fn list_keylog_apps_impl(storage: &StorageHandle) -> Vec<String> {
+    storage::keylog::list_apps(storage)
+        .map(|rows| rows.into_iter().map(|row| row.binary_path).collect())
+        .unwrap_or_else(|error| {
+            tracing::error!(error = %error, "list_keylog_apps (storage) échoué");
+            Vec::new()
+        })
+}
+
+/// EPIC 3.5 : persiste réellement via `storage::keylog` — l'injection effective (wrapper +
+/// surcharge `.desktop`) n'a lieu qu'au prochain `KeylogSubsystem::start()` (activation du kill
+/// switch), pas immédiatement à l'ajout (cf. `keylog::subsystem`).
 #[tauri::command]
-pub fn add_keylog_app(path: String) -> Vec<String> {
-    let mut apps = list_keylog_apps();
-    if !apps.contains(&path) {
-        apps.push(path);
+pub fn add_keylog_app(storage: State<'_, StorageHandle>, path: String) -> Vec<String> {
+    if let Err(error) = storage::keylog::add_app(&storage, &path) {
+        tracing::error!(error = %error, path, "add_keylog_app (storage) échoué");
     }
-    apps
+    list_keylog_apps_impl(&storage)
 }
 
-/// EPIC 3.5 remplacera ce mock par keylog::remove_covered_app(path).
+/// EPIC 3.5 : persiste réellement via `storage::keylog`. Restaure d'abord une éventuelle
+/// injection active (`keylog::restore_app_injection`) AVANT de supprimer la ligne — sinon une
+/// app retirée pendant que le kill switch est actif laisserait sa surcharge `.desktop`
+/// orpheline, jamais restaurée par un futur `stop()` qui ne la connaîtrait plus (décision non
+/// explicite dans PLAN.md, tranchée au rapport de livraison EPIC 3).
 #[tauri::command]
-pub fn remove_keylog_app(path: String) -> Vec<String> {
-    list_keylog_apps()
-        .into_iter()
-        .filter(|a| a != &path)
-        .collect()
+pub fn remove_keylog_app(storage: State<'_, StorageHandle>, path: String) -> Vec<String> {
+    crate::keylog::restore_app_injection(&storage, &path);
+    if let Err(error) = storage::keylog::remove_app(&storage, &path) {
+        tracing::error!(error = %error, path, "remove_keylog_app (storage) échoué");
+    }
+    list_keylog_apps_impl(&storage)
 }
 
 #[cfg(test)]

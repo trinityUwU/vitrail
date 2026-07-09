@@ -111,6 +111,106 @@ fn insert_fts_row(
     Ok(())
 }
 
+/// Met à jour un flow déjà persisté (enrichissement a posteriori par un fragment déchiffré
+/// tardif arrivé après fermeture capture+attribution, 5.2 — cf. `correlation::update`) —
+/// ré-écrit `flows` ET `flows_fts` pour le même `id`, jamais un nouvel `INSERT` : c'est
+/// précisément ce qui évite le doublon que produirait un second `insert_flow`.
+pub fn update_flow(storage: &StorageHandle, flow: &Flow) -> Result<(), StorageError> {
+    let encoded = encode_flow(flow)?;
+    let conn = storage.lock();
+    update_flow_row(&conn, flow, &encoded)?;
+    update_fts_row(&conn, flow, &encoded)?;
+    Ok(())
+}
+
+const UPDATE_FLOW_SQL: &str = "UPDATE flows SET
+    process = ?2, destination = ?3, visibility = ?4, method = ?5, path = ?6, status = ?7,
+    request_headers_json = ?8, response_headers_json = ?9, body_preview = ?10,
+    content_type = ?11, certificate_json = ?12, sources_json = ?13
+ WHERE id = ?1";
+
+fn update_flow_row(
+    conn: &rusqlite::Connection,
+    flow: &Flow,
+    encoded: &EncodedFlow,
+) -> Result<(), StorageError> {
+    conn.execute(
+        UPDATE_FLOW_SQL,
+        params![
+            flow.id,
+            flow.process,
+            flow.destination,
+            visibility_to_str(flow.visibility),
+            flow.method,
+            flow.path,
+            flow.status,
+            encoded.request_headers_json,
+            encoded.response_headers_json,
+            flow.body_preview,
+            flow.content_type,
+            encoded.certificate_json,
+            encoded.sources_json,
+        ],
+    )?;
+    Ok(())
+}
+
+fn update_fts_row(
+    conn: &rusqlite::Connection,
+    flow: &Flow,
+    encoded: &EncodedFlow,
+) -> Result<(), StorageError> {
+    let headers_text = format!(
+        "{} {}",
+        encoded.request_headers_json, encoded.response_headers_json
+    );
+    conn.execute(
+        "UPDATE flows_fts SET destination = ?1, body_preview = ?2, headers = ?3, process = ?4
+         WHERE flow_id = ?5",
+        params![
+            flow.destination,
+            flow.body_preview,
+            headers_text,
+            flow.process,
+            flow.id,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Recherche le flow le plus récent correspondant à un 4-tuple ip/port/source_ip/source_port
+/// dans une fenêtre de `window_secs` secondes — protocole volontairement exclu du filtre :
+/// `Flow.protocol` porte le protocole applicatif détecté par `capture/` (ex "TLS 1.3"), pas le
+/// protocole transport brut du 5-tuple d'origine, comparer dessus produirait de faux négatifs.
+/// Utilisé par `correlation::update` (5.2) pour retrouver un flow déjà émis avant de l'enrichir
+/// a posteriori avec un fragment déchiffré tardif, plutôt que d'en persister un second pour la
+/// même connexion.
+pub fn find_recent_by_five_tuple(
+    storage: &StorageHandle,
+    ip: &str,
+    port: u16,
+    source_ip: &str,
+    source_port: u16,
+    window_secs: i64,
+) -> Result<Option<Flow>, StorageError> {
+    let conn = storage.lock();
+    let earliest = now_unix() - window_secs;
+    conn.query_row(
+        "SELECT id, timestamp_unix, process, destination, ip, port, protocol, size_bytes,
+                visibility, duration_ms, source_ip, source_port, method, path, status,
+                request_headers_json, response_headers_json, body_preview, content_type,
+                certificate_json, sources_json
+         FROM flows
+         WHERE ip = ?1 AND port = ?2 AND source_ip = ?3 AND source_port = ?4
+               AND timestamp_unix >= ?5
+         ORDER BY timestamp_unix DESC LIMIT 1",
+        params![ip, port, source_ip, source_port, earliest],
+        row_to_flow,
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 /// Les plus récents en premier, bornés à `limit` (Timeline, story 8.1).
 pub fn list_flows(storage: &StorageHandle, limit: u32) -> Result<Vec<Flow>, StorageError> {
     let conn = storage.lock();

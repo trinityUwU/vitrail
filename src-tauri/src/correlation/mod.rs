@@ -7,6 +7,7 @@
 mod builder;
 mod channel;
 mod engine;
+mod update;
 mod visibility;
 
 pub use channel::{channel, CorrelationEvent, CorrelationSender};
