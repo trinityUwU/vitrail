@@ -175,6 +175,32 @@ logique métier ici).
 Ce tableau est une proposition par défaut, pas une décision fermée — à valider une fois
 qu'on attaque l'implémentation (cf. section "orchestration" à discuter séparément).
 
+## 6bis. Élévation de privilèges (décidé 2026-07-09)
+
+nftables (application/retrait de la chaîne `VITRAIL_REDIRECT`) et l'installation/retrait de
+la CA locale dans le trust store système exigent root. Modèle retenu : **polkit par action**,
+pas de daemon privilégié persistant.
+
+- Un petit binaire séparé `vitrail-helper` (pas l'app Tauri elle-même) exécute les opérations
+  root ponctuelles : `apply-nft-chain` / `flush-nft-chain` / `install-ca` / `remove-ca`.
+- Chaque appel passe par `pkexec` avec une règle polkit dédiée (`re.vitrail.helper.policy`)
+  déclenchant un prompt natif — une action = une autorisation, jamais un daemon root qui
+  tourne en continu.
+- L'app Tauri (`killswitch/`) orchestre la séquence en invoquant `vitrail-helper` pour chaque
+  étape privilégiée, capture son code de sortie/stderr pour le journal d'audit du kill switch
+  (écran 8), jamais de sudo interactif caché dans un script.
+- Conséquence sur `killswitch/` (EPIC 7) : la séquence d'activation/désactivation doit
+  supporter qu'une étape déclenche un prompt utilisateur (polkit) et attendre sa réponse avant
+  de continuer — pas une simple boucle synchrone silencieuse.
+- Conséquence packaging (EPIC 10) : le paquet doit installer `vitrail-helper` avec le bon
+  binaire de contrôle, le fichier `.policy` polkit, et documenter clairement à l'utilisateur
+  ce que chaque prompt autorise (contre la fatigue d'autorisation aveugle).
+
+Rejeté : daemon privilégié persistant (surface d'attaque continue, contraire au principe
+zéro-résidu déjà posé en section 5) ; app Tauri lancée root (violerait le moindre privilège
+de façon injustifiable pour une app dont l'essentiel du travail — UI, corrélation, lecture —
+n'a besoin d'aucun privilège).
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

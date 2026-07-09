@@ -347,7 +347,10 @@ utilisateurs vont demander de l'aide avec ces logs).
 
 **Étapes à couvrir** (checklist, chaque étape avec statut vérifié/en attente/échoué)
 1. Vérification qu'OpenSnitch est installé et son daemon actif (lien vers instructions
-   d'installation si absent, jamais un blocage muet).
+   d'installation si absent, jamais un blocage muet). Si le daemon est déjà configuré pour
+   parler à une autre UI (GUI officielle OpenSnitch notamment), avertissement explicite :
+   activer Vitrail reconfigure le daemon pour lui parler exclusivement, l'autre UI cessera
+   de recevoir des événements tant que Vitrail est actif (restauré à la désactivation).
 2. Génération de la CA locale + explication de ce que ça implique avant toute action.
 3. Vérification des permissions nécessaires (nftables/CA) et déclenchement de l'élévation
    de privilèges au bon moment, jamais en surprise.

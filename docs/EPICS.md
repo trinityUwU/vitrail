@@ -27,17 +27,34 @@ Objectif : un dépôt public sain, buildable, avec les scripts et docs obligatoi
 ## EPIC 1 — Attribution processus (OpenSnitch)
 Objectif : savoir, pour chaque connexion, quel processus l'a ouverte.
 
-- **1.1** Détection au démarrage : OpenSnitch est-il installé/lancé ? Si non, état dégradé
-  explicite dans l'UI (pas de crash, pas de faux positif silencieux).
-- **1.2** Client gRPC vers le daemon OpenSnitch (ou lecture de son socket d'événements
-  selon la version packagée) — décodage en `AttributionEvent`.
+**Correction d'architecture (spike 2026-07-09)** : le daemon `opensnitchd` est le **client**
+gRPC — il se connecte *vers* une UI qui fait tourner le **serveur** gRPC implémentant
+`ui.proto` (défaut `unix:///tmp/osui.sock`, configurable via `-ui-socket`). `attribution/`
+doit donc implémenter le serveur `ui.proto` (crate `tonic`), pas un client. Prior art validé :
+`ostui`/`opensnitch-tui` font déjà ça en dehors de la GUI Qt officielle. Le `.proto` source
+est réutilisable tel quel depuis le dépôt OpenSnitch. Conséquence pratique : le daemon ne
+parle qu'à un seul socket UI à la fois — activer Vitrail implique de reconfigurer
+`opensnitchd` (`-ui-socket` ou son fichier de config) pour pointer vers Vitrail, ce qui coupe
+la GUI officielle OpenSnitch pendant ce temps si l'utilisateur l'utilisait. À documenter
+explicitement dans l'onboarding (écran 13, `UI_SPEC.md`), pas une surprise silencieuse.
+
+- **1.1** Détection au démarrage : OpenSnitch est-il installé/lancé, et son `ui_socket`
+  actuel pointe-t-il déjà ailleurs (GUI officielle ou autre) ? État dégradé explicite dans
+  l'UI si absent, avertissement explicite si une reconfiguration va couper une autre UI.
+- **1.2** Serveur gRPC (`tonic`) implémentant `ui.proto`, écoute sur un socket UNIX dédié
+  Vitrail ; reconfiguration du daemon (`-ui-socket` ou fichier de config, selon ce qui est
+  le moins intrusif) pour qu'il s'y connecte ; décodage des événements reçus en
+  `AttributionEvent`.
 - **1.3** Cache pid→exe_path avec gestion du recyclage de pid (un pid réutilisé après la
   mort d'un process ne doit jamais attribuer une connexion au mauvais binaire).
 - **1.4** Résolution du chemin binaire vers un nom d'application lisible (heuristique :
   `.desktop` associé, sinon nom du binaire brut) — pour affichage humain uniquement, jamais
   pour la logique de corrélation (qui reste sur le pid/exe_path exact).
-- **1.5** Tests : simulation d'événements OpenSnitch rejoués depuis un fixture, vérification
-  du cache pid et de la résolution.
+- **1.5** Tests : simulation d'événements OpenSnitch rejoués depuis un fixture (client gRPC
+  de test simulant le daemon), vérification du cache pid et de la résolution.
+- **1.6** Restauration du `ui_socket` d'origine du daemon à la désactivation de Vitrail
+  (cohérent avec la garantie de réversibilité — cf. `PLAN.md` section 5) : si l'utilisateur
+  avait la GUI officielle configurée avant, elle doit redevenir fonctionnelle après coupure.
 
 ## EPIC 2 — Capture réseau brute
 Objectif : visibilité de base indépendante du TLS, base commune de vérité des flux.
