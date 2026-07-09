@@ -93,7 +93,7 @@ pub fn run() {
             settings::list_sessions,
             settings::get_session_detail,
             settings::delete_session,
-            settings::get_log_entries,
+            settings::log_entries::get_log_entries,
             settings::purge_logs,
             settings::purge_data,
             settings::list_keylog_apps,

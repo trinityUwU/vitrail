@@ -36,12 +36,12 @@ le backlog non structuré.
 
 ## Immédiat
 
-- [ ] **BLOQUANT USAGE RÉEL** (2026-07-10, cf. STATE.md) : l'app se lance mais rien n'est
-      utilisable — aucun setup système post-code n'a été fait (`vitrail-helper` non installé,
-      pas de règle polkit, `vitrail-capture-helper` sans `setcap`, `tshark`/`PolarProxy`/
-      `opensnitchd` absents). Pas un bug de régression (dégradation propre confirmée) mais un
-      vrai trou de process avant de pouvoir dire que l'app "marche". Priorité avant tout
-      nouveau EPIC — voir STATE.md pour le plan en 5 points.
+- [x] **BLOQUANT USAGE RÉEL** (2026-07-10, résolu — cf. STATE.md) : setup système complet
+      (vitrail-helper/policy polkit/setcap/tshark/opensnitchd/PolarProxy/agent polkit
+      Hyprland), bug d'idempotence CA corrigé, et raccordement IPC réel de
+      dashboard/processus/destinations/journal système (PLAN.md §6decies) — Alertes & Règles
+      en stub honnête vide (décision explicite, pas de moteur d'évaluation dans cette passe).
+      Reste à confirmer par un test bout-en-bout complet par Chris.
 
 - [x] Repo GitHub public créé et poussé : https://github.com/trinityUwU/vitrail.
 - [x] EPIC 7 (squelette kill switch) livré, audité, corrigé — voir STATE.md.
@@ -60,6 +60,9 @@ le backlog non structuré.
 - [ ] Remplacer les icônes app Tauri (encore le template par défaut).
 - [ ] Packaging EPIC 10 : ajuster le chemin en dur `/usr/local/bin/vitrail-helper`
       (Rust + `.policy` polkit) au vrai chemin d'installation choisi.
+- [ ] Moteur d'alertes complet (persistance `alert_rules`/`alert_events` + évaluation temps
+      réel contre les flux) — reporté à un futur EPIC dédié, stub honnête vide en attendant
+      (décision 2026-07-10, cf. STATE.md et PLAN.md §6decies).
 
 ## Backlog (non priorisé)
 

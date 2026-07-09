@@ -37,6 +37,38 @@ pub fn record_system_event(
     Ok(())
 }
 
+/// Une ligne `system_events` brute — `commands::settings::get_log_entries` (PLAN.md §6decies)
+/// dérive `LogEntry` à partir de `label`/`snapshot_json`, jamais ici : `storage/` ignore le
+/// schéma métier du JSON qu'il stocke (même principe que `record_system_event`).
+pub struct SystemEventRow {
+    pub timestamp_unix: i64,
+    pub label: String,
+    pub snapshot_json: String,
+}
+
+/// Les plus récents en premier, bornés à `limit` (Journal système, #11).
+pub fn list_system_events(
+    storage: &StorageHandle,
+    limit: u32,
+) -> Result<Vec<SystemEventRow>, StorageError> {
+    let conn = storage.lock();
+    // `id DESC` en clé secondaire : `timestamp_unix` a une résolution à la seconde et
+    // pre-activation/post-activation (killswitch::activate) peuvent tomber dans la même
+    // seconde — sans elle, SQLite ne garantit pas l'ordre chronologique réel entre les deux.
+    let mut stmt = conn.prepare(
+        "SELECT timestamp_unix, label, snapshot_json FROM system_events
+         ORDER BY timestamp_unix DESC, id DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |row| {
+        Ok(SystemEventRow {
+            timestamp_unix: row.get(0)?,
+            label: row.get(1)?,
+            snapshot_json: row.get(2)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 /// Insère un paquet capturé (remplace `capture_events.jsonl`).
 pub fn record_capture_packet(
     storage: &StorageHandle,
@@ -61,4 +93,26 @@ pub fn record_capture_packet(
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::connection::StorageHandle;
+    use super::*;
+
+    #[test]
+    fn list_system_events_renvoie_les_plus_recents_en_premier_borne_a_limit() {
+        let storage = StorageHandle::open_in_memory().expect("storage mémoire");
+        record_system_event(&storage, "pre-activation", "{}").expect("event 1");
+        record_system_event(&storage, "post-activation", "{}").expect("event 2");
+        record_system_event(&storage, "post-deactivation", "{}").expect("event 3");
+
+        let events = list_system_events(&storage, 2).expect("list_system_events");
+        assert_eq!(events.len(), 2, "borné à limit");
+        assert_eq!(
+            events[0].label, "post-deactivation",
+            "le plus récent d'abord"
+        );
+        assert_eq!(events[1].label, "post-activation");
+    }
 }

@@ -579,6 +579,61 @@ garde-fou de secours est non négociable, pas une amélioration optionnelle.
   strict). La séquence CA → nftables → PolarProxy → attribution → capture → keylog câblée
   depuis EPIC 7 devient enfin intégralement réelle sur ses 6 étapes.
 
+## 6decies. Raccordement réel des commandes IPC restantes (décidé 2026-07-10)
+
+Constat post-livraison EPIC 1-7 : premier test réel bout-en-bout (Chris, après setup système
+complet) montre que le dashboard, l'écran Processus, l'écran Destinations, Alertes & Règles et
+le Journal système affichent tous des données `mock_data`/`mock_flows` jamais remplacées — le
+commentaire `// EPIC 5/6 remplaceront ce mock` laissé dans `commands/dashboard.rs`,
+`commands/destinations.rs`, `commands/processes.rs` n'a jamais été honoré malgré EPIC 5
+(corrélation) et EPIC 6 (storage) marqués complets. `commands/flows.rs` et l'essentiel de
+`commands/settings.rs` sont, eux, déjà réels (storage-backed) — seul un sous-ensemble précis
+reste à raccorder.
+
+- **Pas de nouvelle table nécessaire pour dashboard/processus/destinations** : la table `flows`
+  (EPIC 5/6) contient déjà `process`, `destination`, `ip`, `port`, `size_bytes`, `visibility`,
+  `timestamp_unix` — largement suffisant pour des agrégations SQL. Nouveau module
+  `storage/aggregates.rs` (ou fonctions ajoutées à `storage/flows.rs`, au choix de l'agent de
+  build selon la cohésion du fichier existant) exposant :
+  - `summarize_dashboard()` → connexions actives (flows dont `last_seen` récent, fenêtre à
+    définir raisonnablement, ex. 5 min), volumes in/out cumulés, `meta_only_count`, top 6
+    processus/destinations par volume.
+  - `list_processes_aggregated()` / `get_process_aggregated(name)` → group by `process`,
+    somme `size_bytes`, `COUNT(DISTINCT destination)`, visibilité dominante.
+  - `list_destinations_aggregated()` / `get_destination_aggregated(domain)` → group by
+    `destination`, mêmes agrégats côté destination + `first_seen`/`last_seen` (`MIN`/`MAX`
+    timestamp).
+  Remplacer `mock_data::processes()`/`mock_data::destinations()` par ces vraies requêtes dans
+  `commands/dashboard.rs`, `commands/processes.rs`, `commands/destinations.rs`. Supprimer
+  `mock_data.rs`/`mock_flows.rs` seulement une fois plus AUCUN appelant réel ne les référence
+  (vérifier `grep -rn mock_data\|mock_flows` avant suppression).
+- **Tag destination (`tag_destination`, EPIC 6.3 jamais fait)** : `destinations` n'a pas de
+  table dédiée (dérivées de `flows`) — ajouter une migration légère `destination_tags(domain
+  TEXT PRIMARY KEY, tag TEXT NOT NULL)`, `storage::destinations::set_tag`/`get_tag`, fusionner
+  dans `get_destination_aggregated`. Suit le même pattern d'écriture minimale que
+  `storage::keylog::add_app`.
+- **`get_log_entries` (Journal système, #11)** : remplace la liste statique par une vraie
+  requête sur `system_events` (même table déjà utilisée par `purge_logs`), triée par
+  `timestamp_unix DESC`, limite raisonnable (ex. 200). Un `LogEntry{time, level, subsystem,
+  message}` doit être dérivé du contenu JSON déjà stocké par `storage::events::record_system_event`
+  — vérifier le format exact des events déjà écrits (killswitch, capture, attribution,
+  decryption, keylog) avant de fixer le mapping, ne pas deviner un schéma.
+- **Alertes & Règles : stub honnête vide, PAS un moteur complet (décision explicite de Chris,
+  2026-07-10)** — hors périmètre de cette passe. `list_alert_rules` retourne `Vec::new()` (plus
+  de `seed_alert_rules()` fictif), `create_alert_rule`/`update_alert_rule` restent des
+  opérations en mémoire non persistées (comme documenté actuellement, mais SANS les 3 règles
+  fictives pré-remplies), `list_alert_events` retourne `Vec::new()` (plus de fabrication à
+  partir de `mock_flows`). Aucune nouvelle table `alert_rules`/`alert_events` dans cette passe
+  — un futur EPIC dédié construira la persistance + le moteur d'évaluation temps réel. Ne pas
+  laisser un faux sentiment de règles actives : le frontend doit afficher un état vide clair,
+  pas une erreur.
+- **Portée volontairement exclue de cette passe** : le moteur d'alertes complet (cf.
+  ci-dessus), tout ce qui est déjà réel dans `flows.rs`/`settings.rs` (ne pas y toucher hors
+  `get_log_entries`).
+- **Tests** : chaque nouvelle fonction d'agrégation doit avoir au moins un test unitaire avec
+  `StorageHandle::open_in_memory()` et des flows insérés à la main (même pattern que les tests
+  existants de `storage/flows.rs`) — pas de test contre la vraie base sur disque.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

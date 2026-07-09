@@ -278,53 +278,74 @@ Scaffold Tauri complet et cohérent. Le repo contenait déjà à ce stade :
 - Chemin en dur `/usr/local/bin/vitrail-helper` (Rust + `.policy` polkit) à ajuster au vrai
   chemin d'installation choisi en EPIC 10.
 
-## ⚠️ Bloquant usage réel (2026-07-10) — l'app se lance mais rien ne fonctionne vraiment
+## ✅ Bloquant usage réel (2026-07-10) — résolu
 
-Constat de Chris après premier lancement réel (`bun run tauri dev` opérationnel, fenêtre
-Tauri s'ouvre, migrations SQLite appliquées) : **aucune fonctionnalité de fond n'est
-utilisable**. Root cause confirmée par vérification système sur cette machine — **zéro
-setup post-code n'a été fait**, alors que les 7 EPICs (1-7) livrés supposent tous un
-environnement système préparé qui n'existe pas encore :
+Constat initial de Chris : app lançable mais rien d'utilisable. Root cause en deux temps,
+résolus dans l'ordre :
 
-- `/usr/local/bin/vitrail-helper` : **absent** — jamais compilé/installé à cet emplacement.
-  Toute action passant par `pkexec vitrail-helper ...` (nftables, CA, opensnitch-set-socket)
-  échoue silencieusement côté UI (erreur loggée côté Rust, mais rien d'explicite affiché).
-- `/usr/share/polkit-1/actions/re.vitrail.helper.policy` : **non installé** — même sans le
-  binaire, `pkexec` échouerait de toute façon sans la règle polkit.
-- `vitrail-capture-helper` : **pas de `setcap cap_net_raw,cap_net_admin`** appliqué (vérifié
-  `getcap` → vide) — la capture réseau (EPIC 2) ne peut pas démarrer.
-- `tshark`, `PolarProxy`, `opensnitchd` : **aucun des trois n'est installé** sur cette machine
-  (vérifié `which`/`systemctl list-unit-files`) — EPIC 1 (attribution), EPIC 3 (keylog), EPIC 4
-  (PolarProxy) sont donc TOUS en état dégradé dès le démarrage, par design (détection honnête,
-  pas un crash), mais ça veut dire concrètement qu'activer le kill switch depuis l'UI ne fait
-  quasiment rien d'observable — c'est le comportement attendu du code, pas un bug caché, mais
-  ça donne exactement l'impression "rien ne fonctionne" pour quelqu'un qui teste l'app pour
-  la première fois sans avoir fait ce setup.
-- Aucun script d'installation n'existe encore pour automatiser tout ça — c'est littéralement
-  le contenu prévu d'**EPIC 10 (Packaging & distribution)**, jamais commencé.
+**1. Setup système jamais fait (résolu)** — `vitrail-helper`/`vitrail-capture-helper`
+compilés en release et installés (`/usr/local/bin/`), `re.vitrail.helper.policy` installée
+dans `/usr/share/polkit-1/actions/`, `setcap cap_net_raw,cap_net_admin+eip` appliqué sur
+`vitrail-capture-helper` installé (pas sur le binaire `target/release/` — le chemin en dur
+`DEFAULT_HELPER_PATH` dans `capture/subsystem.rs` pointe sur `/usr/local/bin/`, le premier
+essai de setcap sur le mauvais binaire n'avait aucun effet). `tshark`/`opensnitch` installés
+via `pacman` (dépôts officiels Arch `extra`), `opensnitchd` activé/démarré (`systemctl
+enable --now`). `PolarProxy` (binaire propriétaire Netresec, pas dans les dépôts) téléchargé
+manuellement par Chris, installé dans `/opt/polarproxy/`, symlinké vers
+`/usr/local/bin/PolarProxy` (résolution par `$PATH`, `Command::new("PolarProxy")` dans
+`decryption/polarproxy_process.rs`) — permissions du binaire corrigées `0744` → `0755`
+(exécutable root-only par défaut à l'extraction, invisible pour l'utilisateur `trinity`).
+`polkit-kde-authentication-agent-1` (installé mais jamais lancé dans la session Hyprland,
+qui n'est pas Plasma) ajouté en `exec-once` dans `~/.config/hypr/custom/startup.conf` —
+sans lui, tout `pkexec` échouait avec "Error opening current controlling terminal" (aucun
+agent GUI pour afficher le prompt d'authentification).
 
-**Ce n'est pas un bug de régression** — chaque domaine a été audité pour se dégrader
-proprement (pas de crash) quand sa dépendance système est absente. C'est un vrai trou de
-process : le développement a produit 7 EPICs de logique testée unitairement, mais jamais
-"installée" comme le ferait un vrai utilisateur, et personne n'a vérifié le parcours complet
-avant maintenant.
+**2. Bug réel trouvé au premier test d'activation (résolu)** — `install_via_trust`/
+`install_via_debian` (`vitrail-helper/src/ca.rs`) n'étaient pas idempotents : rejouer
+`trust anchor --store` sur une CA déjà installée (résidu d'un essai précédent, fichier déjà
+présent au chemin dérivé de l'empreinte) fait échouer p11-kit ("couldn't create object: The
+field is read-only"), bloquant l'activation entière à l'étape CA. Fix : `dest.exists()` →
+no-op `Ok(())` avant la copie/le `trust anchor --store`, même logique des deux côtés
+(trust/Debian).
 
-**Prochaine étape concrète pour rendre l'app utilisable** (à faire avant de reprendre EPIC 9/
-10/11 ou tout nouveau EPIC) :
-1. Compiler et installer `vitrail-helper` vers `/usr/local/bin/` + installer
-   `re.vitrail.helper.policy` dans `/usr/share/polkit-1/actions/` (nécessite root — action à
-   confirmer explicitement avec Chris avant exécution, ce n'est pas anodin sur sa machine).
-2. `setcap cap_net_raw,cap_net_admin+eip` sur le binaire `vitrail-capture-helper` compilé
-   (déjà documenté dans `CONTRIBUTING.md`, jamais exécuté).
-3. Décider quoi faire pour `tshark`/`PolarProxy`/`opensnitchd` : soit Chris les installe lui
-   -même sur sa machine pour un test réel, soit on documente clairement que sans eux l'app
-   reste utilisable en mode dégradé (dashboard/UI/historique fonctionnent, mais aucune
-   collecte réelle de données réseau).
-4. Idéalement, un script `dev-setup.sh` (ou équivalent, anticipant EPIC 10.2 "script
-   d'installation utilisateur") qui automatise 1-2 pour éviter de refaire ça manuellement à
-   chaque `cargo clean`/nouvelle machine.
-5. Une fois ce setup fait, refaire un test de bout en bout réel (activer le kill switch
-   depuis l'UI, observer le dashboard se peupler) avant de considérer l'app "utilisable".
+**3. Données factices sur tout le dashboard (résolu, PLAN.md §6decies)** — une fois le kill
+switch activable, Chris a signalé (captures d'écran à l'appui) que Vue d'ensemble/Processus/
+Destinations/Journal système/Alertes affichaient des données visiblement fabriquées (mêmes
+timestamps `14:58:30`/`14:58:50` répétés sur plusieurs cartes indépendantes). Root cause :
+`commands/dashboard.rs`, `commands/destinations.rs`, `commands/processes.rs` n'avaient
+**jamais été rebranchés** sur les vrais moteurs malgré EPIC 5 (corrélation)/EPIC 6 (storage)
+marqués complets — le commentaire `// EPIC 5/6 remplaceront ce mock` laissé dans le code
+n'avait jamais été honoré. `commands/flows.rs` et l'essentiel de `commands/settings.rs`
+étaient, eux, déjà réels.
+- Build agent : nouveau module `storage/aggregates.rs` (agrégations SQL sur la table `flows`
+  existante — aucune nouvelle table nécessaire pour dashboard/processus/destinations),
+  `storage/destinations.rs` + migration `0006_destination_tags.sql` pour la persistance des
+  tags, `get_log_entries` branché sur une vraie requête `system_events`, Alertes & Règles
+  passé en stub honnête vide (décision explicite de Chris — pas de moteur d'évaluation
+  temps réel dans cette passe, un futur EPIC dédié). `mock_data.rs`/`mock_flows.rs` supprimés.
+- Fix direct (agent parent) : `get_dashboard_summary` avait `kill_switch_active`/
+  `active_since`/`degraded` encore en dur (hors périmètre écrit dans PLAN.md par oubli) —
+  branché sur `KillSwitchState::current_status()` (déjà réel depuis EPIC 7).
+  `active_since` reste `None` : aucun timestamp d'activation n'est tracké dans
+  `killswitch/Inner` (seulement un booléen `active`), `None` honnête plutôt qu'une valeur
+  inventée.
+- Audit séparé a trouvé et fait corriger : `cargo fmt` jamais rejoué par le build agent
+  (signature de `get_dashboard_summary_impl` non formatée) ; `list_system_events`
+  (`storage/events.rs`) triait uniquement par `timestamp_unix DESC` sans clé secondaire —
+  `timestamp_unix` a une résolution à la seconde et pre-activation/post-activation
+  (`killswitch::activate`) peuvent tomber dans la même seconde, l'ordre du Journal système
+  n'était donc pas garanti chronologique dans ce cas ; fix `ORDER BY timestamp_unix DESC,
+  id DESC`.
+- `cargo build --workspace`/`test -p vitrail` (99 tests)/`clippy --workspace --all-targets`/
+  `fmt --check` tous verts après les deux fixes d'audit.
+
+**Limite connue restante (pas un bug, signalée par l'audit)** : `KillSwitchState::
+current_status().kill_switch_state` ne dérive que du booléen `active` ("active"/"inactive"),
+jamais un label "degraded" — le champ `degraded` du dashboard dépend de
+`last_verification_clean`, mis à jour seulement par `deactivate()`/`verify_teardown()`/
+`emergency_stop()`, jamais par `activate()`. Une activation partiellement dégradée ne se
+reflète donc pas immédiatement sur le dashboard tant qu'aucune désactivation/vérification
+n'a suivi. Hors scope de cette passe, à traiter si ça devient gênant à l'usage.
 
 ## Prochaine étape
 

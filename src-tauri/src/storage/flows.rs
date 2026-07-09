@@ -275,7 +275,9 @@ fn build_prefix_match(needle: &str) -> String {
         .join(" ")
 }
 
-fn visibility_to_str(visibility: FlowVisibility) -> &'static str {
+/// `pub(super)` — réutilisée par `storage::aggregates` pour rester la source unique de la
+/// correspondance `FlowVisibility` <-> texte stocké (pas de second mapping dupliqué).
+pub(super) fn visibility_to_str(visibility: FlowVisibility) -> &'static str {
     match visibility {
         FlowVisibility::Fully => "fully",
         FlowVisibility::Meta => "meta",
@@ -284,7 +286,7 @@ fn visibility_to_str(visibility: FlowVisibility) -> &'static str {
     }
 }
 
-fn visibility_from_str(value: &str) -> FlowVisibility {
+pub(super) fn visibility_from_str(value: &str) -> FlowVisibility {
     match value {
         "fully" => FlowVisibility::Fully,
         "meta" => FlowVisibility::Meta,

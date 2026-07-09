@@ -8,8 +8,10 @@ mod connection;
 mod error;
 mod migrations;
 
+pub mod aggregates;
 pub mod attribution;
 pub mod decryption;
+pub mod destinations;
 pub mod events;
 pub mod flows;
 pub mod keylog;

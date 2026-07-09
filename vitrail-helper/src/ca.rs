@@ -85,6 +85,12 @@ fn anchor_path(dir: &str, fingerprint: &str) -> PathBuf {
 
 fn install_via_trust(cert_path: &str, fingerprint: &str) -> Result<(), String> {
     let dest = anchor_path(TRUST_ANCHOR_DIR, fingerprint);
+    // Le nom de fichier encode l'empreinte exacte : si présent, c'est déjà CETTE CA, installée
+    // par une activation précédente. `trust anchor --store` sur un objet p11-kit déjà stocké
+    // échoue ("field is read-only") au lieu de no-op — vérifier avant plutôt que de réessayer.
+    if dest.exists() {
+        return Ok(());
+    }
     std::fs::copy(cert_path, &dest)
         .map_err(|error| format!("copie vers {} échouée: {error}", dest.display()))?;
     run(Command::new("trust").args(["anchor", "--store"]).arg(&dest))
@@ -92,6 +98,9 @@ fn install_via_trust(cert_path: &str, fingerprint: &str) -> Result<(), String> {
 
 fn install_via_debian(cert_path: &str, fingerprint: &str) -> Result<(), String> {
     let dest = anchor_path(DEBIAN_ANCHOR_DIR, fingerprint).with_extension("crt");
+    if dest.exists() {
+        return Ok(());
+    }
     std::fs::copy(cert_path, &dest)
         .map_err(|error| format!("copie vers {} échouée: {error}", dest.display()))?;
     run(&mut Command::new("update-ca-certificates"))

@@ -111,10 +111,14 @@ src-tauri/                  — backend Tauri (Rust)
       flows.rs                           — insert_flow/list_flows/get_flow/search_flows (FTS5),
                                             find_recent_by_five_tuple/update_flow (EPIC 3)
       keylog.rs                           — list_apps/add_app/remove_app (EPIC 3)
+      aggregates.rs                        — §6decies : agrégations SQL sur flows (dashboard
+                                              summary, processus/destinations group-by)
+      destinations.rs                       — §6decies : set_tag/get_tag (destination_tags)
     src-tauri/migrations/0001_init.sql — schéma initial : system_events/capture_events/
       attribution_state (+ index timestamp/pid), flows/processes vides, flows_fts (FTS5)
     src-tauri/migrations/0002_flows_detail.sql — complète flows, recrée flows_fts (colonne
       process) — les deux alimentées pour de vrai depuis EPIC 5
+    src-tauri/migrations/0006_destination_tags.sql — table destination_tags(domain PK, tag)
     killswitch/                   — EPIC 7 : squelette d'orchestration réel (livré, audité)
       mod.rs                       — KillSwitchState partagé, API publique, snapshot pré-activation
       subsystem.rs                  — trait Subsystem + StubSubsystem (CA/PolarProxy/attribution/
@@ -135,10 +139,14 @@ src-tauri/                  — backend Tauri (Rust)
       types.rs                      — structs serde partagées (contrat IPC), inclut
                                        HttpHeader/CertificateInfo/CorrelationSource/AlertEvent/
                                        SearchCriteria/SavedQuery/PurgeResult/SessionDetail
-      mock_data.rs / mock_flows.rs   — données de démo (flows séparés pour rester <500 lignes)
       dashboard.rs / flows.rs / processes.rs / destinations.rs / killswitch.rs / settings.rs /
       alerts.rs / search.rs          — commandes #[tauri::command] (contrat complet cf.
-                                       docs/EPICS.md 8.1-8.3), mocks commentés EPIC réel
+                                       docs/EPICS.md 8.1-8.3) — toutes réelles (storage::
+                                       aggregates/flows/sessions/keylog/destinations) depuis
+                                       §6decies (2026-07-10) ; alerts.rs = stub honnête vide
+                                       (pas de mock, pas de moteur d'évaluation)
+      settings/log_entries.rs         — §6decies : get_log_entries réel sur system_events
+                                         (extrait de settings.rs pour rester <500 lignes)
 
 src/                        — frontend React/TypeScript (Vite)
   main.tsx / App.tsx / vite-env.d.ts — bootstrap, routage entre écrans, providers

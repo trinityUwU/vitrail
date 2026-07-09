@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::storage::aggregates::{DestinationAggregate, ProcessAggregate};
+
 /// `SystemStatus`/`SubsystemStatus`/`TeardownReport` sont possédés par `crate::shared`
 /// (produits par `killswitch/`, EPIC 7) — ré-exportés ici tels quels pour ne pas casser le
 /// contrat IPC existant (`#[tauri::command]` dans `commands/killswitch.rs`). `SubsystemStatus`
@@ -43,6 +45,56 @@ pub struct DestinationInfo {
     pub first_seen: String,
     pub last_seen: String,
     pub tag: Option<String>,
+}
+
+/// `path`/`pids`/`keylog_covered` n'ont pas de source dans `flows` (PLAN.md §6decies exclut
+/// explicitement toute nouvelle table pour cette passe) : défauts honnêtes plutôt qu'une
+/// valeur inventée — un futur EPIC pid-keyed (colonne déjà réservée dans `attribution_state`,
+/// migration 0001) les alimentera.
+impl From<ProcessAggregate> for ProcessInfo {
+    fn from(aggregate: ProcessAggregate) -> Self {
+        ProcessInfo {
+            name: aggregate.name,
+            path: String::new(),
+            pids: Vec::new(),
+            volume_mb: bytes_to_mb(aggregate.volume_bytes),
+            destinations: aggregate.destination_count,
+            visibility: aggregate.visibility,
+            keylog_covered: false,
+        }
+    }
+}
+
+/// `pinning` n'a pas de source dans cette agrégation (`pinning_events` est un domaine distinct,
+/// non joint ici — hors périmètre PLAN.md §6decies) : défaut honnête `false`.
+impl From<DestinationAggregate> for DestinationInfo {
+    fn from(aggregate: DestinationAggregate) -> Self {
+        DestinationInfo {
+            domain: aggregate.domain,
+            ip: aggregate.ip,
+            volume_mb: bytes_to_mb(aggregate.volume_bytes),
+            process_count: aggregate.process_count,
+            visibility: aggregate.visibility,
+            tls: aggregate.tls,
+            pinning: false,
+            first_seen: format_hms(aggregate.first_seen_unix),
+            last_seen: format_hms(aggregate.last_seen_unix),
+            tag: aggregate.tag,
+        }
+    }
+}
+
+fn bytes_to_mb(bytes: i64) -> f64 {
+    bytes.max(0) as f64 / (1024.0 * 1024.0)
+}
+
+/// Même format d'affichage `HH:MM:SS` que `Flow.timestamp` (storage::flows::timestamp_display,
+/// non exportée hors de `storage/` — frontière stricte, ARCHITECTURE.md) : recalculé ici plutôt
+/// que traversé depuis `storage`, qui ne fait pas de présentation.
+fn format_hms(timestamp_unix: i64) -> String {
+    let secs = timestamp_unix.max(0) as u64;
+    let (h, m, s) = ((secs / 3600) % 24, (secs / 60) % 60, secs % 60);
+    format!("{h:02}:{m:02}:{s:02}")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

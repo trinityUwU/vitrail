@@ -6,8 +6,14 @@ use crate::decryption::{self, SystemHelperBackend};
 use crate::storage::sessions::SessionRow;
 use crate::storage::{self, StorageHandle};
 
-use super::mock_data::{MONITORED_INTERFACES, NFTABLES_CHAIN};
-use super::types::{Exclusion, LogEntry, PurgeResult, Session, SessionDetail, Settings};
+use super::types::{Exclusion, PurgeResult, Session, SessionDetail, Settings};
+
+pub mod log_entries;
+
+/// Constantes de config système réelles (pas des valeurs mock) — portées ici depuis
+/// `mock_data.rs` (supprimé, PLAN.md §6decies) dont elles étaient le seul contenu non fictif.
+const NFTABLES_CHAIN: &str = "VITRAIL_REDIRECT";
+const MONITORED_INTERFACES: [&str; 3] = ["wlan0", "wg0", "enp3s0"];
 
 /// EPIC 6/9 remplaceront le reste de ce mock par storage::get_settings() (config TOML
 /// utilisateur) — `ca_fingerprint`/`ca_trust_store_installed` sont réels depuis EPIC 4
@@ -116,58 +122,6 @@ pub fn list_sessions(storage: State<'_, StorageHandle>) -> Vec<Session> {
             Vec::new()
         }
     }
-}
-
-/// EPIC 6/9 remplaceront ce mock par storage::query_logs() (écran Journal système #11).
-#[tauri::command]
-pub fn get_log_entries() -> Vec<LogEntry> {
-    vec![
-        LogEntry {
-            time: "14:58:22".into(),
-            level: "info".into(),
-            subsystem: "killswitch".into(),
-            message: "Vérification post-activation terminée — conforme".into(),
-        },
-        LogEntry {
-            time: "14:58:18".into(),
-            level: "info".into(),
-            subsystem: "capture".into(),
-            message: format!("Chaîne nftables {NFTABLES_CHAIN} active sur wlan0, wg0"),
-        },
-        LogEntry {
-            time: "14:58:15".into(),
-            level: "info".into(),
-            subsystem: "keylog".into(),
-            message: "Fichier SSLKEYLOGFILE initialisé : ~/.vitrail/keylog/sslkeys.log".into(),
-        },
-        LogEntry {
-            time: "14:58:12".into(),
-            level: "info".into(),
-            subsystem: "decryption".into(),
-            message: "PolarProxy démarré (PID 8842), port 8081, CA chargée".into(),
-        },
-        LogEntry {
-            time: "14:58:08".into(),
-            level: "info".into(),
-            subsystem: "attribution".into(),
-            message: "OpenSnitch daemon détecté (v1.6.6), connecté via socket UNIX".into(),
-        },
-        LogEntry {
-            time: "14:57:55".into(),
-            level: "warn".into(),
-            subsystem: "decryption".into(),
-            message:
-                "PolarProxy : le flux vers discord.gg a été mis en fail-open (pinning détecté)"
-                    .into(),
-        },
-        LogEntry {
-            time: "14:45:12".into(),
-            level: "error".into(),
-            subsystem: "attribution".into(),
-            message: "Timeout de connexion au socket OpenSnitch — nouvelle tentative dans 2s"
-                .into(),
-        },
-    ]
 }
 
 /// EPIC 6 (6.6) : purge réelle du journal système (`system_events`) via `storage::retention`.

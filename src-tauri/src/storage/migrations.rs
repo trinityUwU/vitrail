@@ -33,6 +33,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "0005_decryption",
         include_str!("../../migrations/0005_decryption.sql"),
     ),
+    (
+        6,
+        "0006_destination_tags",
+        include_str!("../../migrations/0006_destination_tags.sql"),
+    ),
 ];
 
 pub(super) fn apply_migrations(conn: &Connection) -> Result<(), StorageError> {
