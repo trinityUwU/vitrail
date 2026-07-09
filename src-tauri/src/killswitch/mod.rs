@@ -26,6 +26,7 @@ use thiserror::Error;
 
 pub use subsystem::Subsystem;
 
+use crate::attribution::AttributionSubsystem;
 use crate::capture::CaptureSubsystem;
 use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
 
@@ -50,7 +51,7 @@ struct Inner {
     ca: StubSubsystem,
     nftables: Box<dyn NftablesBackend>,
     polarproxy: StubSubsystem,
-    attribution: StubSubsystem,
+    attribution: Box<dyn Subsystem>,
     capture: Box<dyn Subsystem>,
     keylog: StubSubsystem,
     pre_activation_snapshot: Option<SystemSnapshot>,
@@ -68,20 +69,26 @@ impl KillSwitchState {
         Self::with_backend(
             Box::new(SystemNftablesBackend),
             Box::new(CaptureSubsystem::new()),
+            Box::new(AttributionSubsystem::new()),
         )
     }
 
-    /// Constructeur pour les tests (7.6/EPIC 2) : jamais de `SystemNftablesBackend` ni de
-    /// vrai `CaptureSubsystem` en test — injecter des variantes en mémoire
-    /// (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`) garantit qu'aucun `pkexec` ni
-    /// aucun process privilégié réel n'est déclenché par un test.
-    pub fn with_backend(nftables: Box<dyn NftablesBackend>, capture: Box<dyn Subsystem>) -> Self {
+    /// Constructeur pour les tests (7.6/EPIC 2/EPIC 1) : jamais de `SystemNftablesBackend` ni
+    /// de vrais `CaptureSubsystem`/`AttributionSubsystem` en test — injecter des variantes en
+    /// mémoire (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`,
+    /// `attribution::FakeAttributionSubsystem`) garantit qu'aucun `pkexec` ni aucun process
+    /// privilégié réel n'est déclenché par un test.
+    pub fn with_backend(
+        nftables: Box<dyn NftablesBackend>,
+        capture: Box<dyn Subsystem>,
+        attribution: Box<dyn Subsystem>,
+    ) -> Self {
         Self {
             inner: Mutex::new(Inner {
                 ca: StubSubsystem::new("ca"),
                 nftables,
                 polarproxy: StubSubsystem::new("polarproxy"),
-                attribution: StubSubsystem::new("attribution"),
+                attribution,
                 capture,
                 keylog: StubSubsystem::new("keylog"),
                 pre_activation_snapshot: None,
@@ -211,7 +218,7 @@ fn build_subsystem_refs(inner: &Inner) -> Vec<&dyn Subsystem> {
     vec![
         &inner.ca,
         &inner.polarproxy,
-        &inner.attribution,
+        &*inner.attribution,
         &*inner.capture,
         &inner.keylog,
     ]
@@ -224,7 +231,7 @@ fn build_steps(inner: &Inner) -> Vec<Step<'_>> {
         Step::Subsystem(&inner.ca),
         Step::Nftables(&*inner.nftables),
         Step::Subsystem(&inner.polarproxy),
-        Step::Subsystem(&inner.attribution),
+        Step::Subsystem(&*inner.attribution),
         Step::Subsystem(&*inner.capture),
         Step::Subsystem(&inner.keylog),
     ]

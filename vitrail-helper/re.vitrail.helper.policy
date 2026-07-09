@@ -22,4 +22,23 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/vitrail-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
   </action>
+
+  <!--
+    Action distincte de re.vitrail.helper.nft (EPIC 1, PLAN.md §6quinquies) : périmètre et
+    risque différents (reconfiguration + redémarrage d'un daemon tiers, opensnitchd, plutôt
+    que des règles réseau propres à Vitrail) — un message de prompt polkit dédié et clair
+    plutôt qu'un libellé générique, contre la fatigue d'autorisation aveugle.
+  -->
+  <action id="re.vitrail.helper.opensnitch">
+    <description>Reconfigurer le socket UI d'opensnitchd et redémarrer le service</description>
+    <message>L'authentification est requise pour connecter Vitrail au daemon OpenSnitch</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/vitrail-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
+  </action>
 </policyconfig>

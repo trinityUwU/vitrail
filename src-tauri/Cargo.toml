@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+tonic-build = "0.12"
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -26,4 +27,13 @@ thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 libc = "0.2"
+tonic = "0.12"
+prost = "0.13"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+
+[dev-dependencies]
+tonic = { version = "0.12", features = ["transport"] }
+tower = { version = "0.4", features = ["util"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 

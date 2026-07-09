@@ -285,6 +285,48 @@ l'ambiguïté laissée ouverte en section 2 ("libpcap / AF_PACKET").
   modification de `killswitch/` nécessaire (c'est exactement la garantie que le squelette
   devait fournir).
 
+## 6quinquies. EPIC 1 — Attribution processus (décidé 2026-07-09)
+
+Deuxième domaine réel après capture. S'appuie sur la correction d'architecture déjà actée
+dans `docs/EPICS.md` (EPIC 1) : `attribution/` implémente le **serveur** gRPC `ui.proto`,
+`opensnitchd` en est le client.
+
+- **`.proto` source** : récupérer `proto/ui/ui.proto` tel quel depuis le dépôt public
+  `github.com/evilsocket/opensnitch` (dernière version sur `main` au moment du build), le
+  copier dans `src-tauri/proto/ui.proto` (fichier figé, versionné, pas de génération à la
+  volée depuis internet à l'exécution). `tonic-build` + `prost` compilent ce `.proto` dans
+  `build.rs` de `src-tauri`.
+- **Socket dédié Vitrail** : `$XDG_RUNTIME_DIR/vitrail/ui.sock` (pas `/tmp/osui.sock`, qui
+  est le défaut d'OpenSnitch lui-même — Vitrail a son propre socket nommé pour ne jamais le
+  confondre avec celui d'une autre UI). Créé avec permissions restrictives (dossier 700).
+- **Reconfiguration du daemon (1.2/1.6) — nouvelle action privilégiée** : la config
+  `opensnitchd` (`/etc/opensnitchd/default-config.json`, champ `Server.Address`) et le
+  redémarrage du service (`systemctl restart opensnitchd`) exigent root — même famille de
+  besoin que nftables/CA (6bis). `vitrail-helper` gagne une troisième sous-commande
+  allowlistée : `opensnitch-set-socket <chemin-socket>` (édite le champ JSON, redémarre le
+  service ; JAMAIS d'exécution shell arbitraire, le chemin socket est validé côté Rust avant
+  l'appel — motif attendu strict, refus si ça ne ressemble pas à un chemin de socket UNIX
+  légitime). `attribution/` lit l'adresse d'origine AVANT de la remplacer (story 1.1),
+  la garde en mémoire/JSONL provisoire (même pattern que `system_events.jsonl`), et rappelle
+  `opensnitch-set-socket <adresse-d-origine>` à la désactivation (story 1.6) — restaurer
+  n'est jamais un no-op silencieux si le daemon n'a pas pu être contacté, le kill switch doit
+  le voir comme une divergence en 7.4.
+- **Cache pid→exe (1.3)** : clé composite `(pid, start_time)` — `start_time` lu dans
+  `/proc/<pid>/stat` (champ 22, temps de démarrage en ticks depuis le boot), jamais le pid
+  seul, pour ne jamais confondre un pid recyclé avec l'ancien process qui l'occupait.
+- **Résolution nom d'application (1.4)** : heuristique best-effort, cherche un `.desktop`
+  dans `$XDG_DATA_DIRS/applications/` dont la ligne `Exec=` référence le basename du binaire
+  résolu ; à défaut, nom du binaire brut. Utilisé UNIQUEMENT pour l'affichage — la logique de
+  corrélation (EPIC 5) continue de raisonner sur `pid`/`exe_path` exacts, jamais sur ce nom.
+- **Tests (1.5)** : un vrai client `tonic` de test se connecte au socket Vitrail et rejoue des
+  messages `ui.proto` construits à la main (notifications de connexion), vérifie le décodage
+  en `AttributionEvent` et la mise à jour du cache — pas de mock au niveau du protocole,
+  seulement au niveau de la vraie reconfiguration système (pas de vrai `opensnitchd` requis
+  en test, seulement le serveur gRPC de Vitrail).
+- **`attribution::AttributionSubsystem`** implémente le trait `Subsystem` (comme
+  `CaptureSubsystem`), remplace le stub "attribution" dans `killswitch/subsystem.rs` sans
+  modification de l'orchestration.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

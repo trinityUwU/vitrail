@@ -48,7 +48,16 @@ src-tauri/                  — backend Tauri (Rust)
   icons/                     — icônes app (défaut template, à remplacer)
   src/
     main.rs / lib.rs         — point d'entrée, enregistrement des commandes
-    attribution/mod.rs        — stub EPIC 1 : serveur ui.proto (tonic), cache pid→exe (non implémenté)
+    attribution/               — EPIC 1 : serveur gRPC ui.proto réel (livré, audité)
+      mod.rs                    — déclaration du sous-module
+      pb.rs                      — types générés par tonic-build depuis proto/ui.proto
+      server.rs                   — service UI (AskRule non-bloquant, timeout 500ms,
+                                     AbnormalExitGuard de restauration automatique)
+      cache.rs                     — cache pid→exe clé (pid, start_time) /proc/<pid>/stat
+      desktop_resolver.rs           — résolution nom .desktop + AppNameCache (hors chemin critique)
+      daemon_config.rs               — détection/lecture/reconfiguration opensnitchd (1.1/1.2/1.6)
+      subsystem.rs                    — AttributionSubsystem (trait Subsystem)
+      tests.rs                         — tests d'intégration gRPC réels + collision pid
     capture/                   — EPIC 2 : capture AF_PACKET réelle (livrée, auditée)
       mod.rs                    — déclaration du sous-module
       subsystem.rs               — CaptureSubsystem (trait Subsystem), spawn/SIGTERM→SIGKILL,
@@ -142,8 +151,13 @@ src/                        — frontend React/TypeScript (Vite)
   setcap) + `CaptureSubsystem` branché sans aucune modification de `killswitch/` au-delà du
   remplacement du stub. 5-tuple/timestamp/volumétrie/SNI/protocole best-effort/rate limiting
   tous couverts, 11 tests unitaires sur le parsing (donnée réseau non fiable).
-- **EPICs 1,3,4,5,6 (attribution/keylog/décryptage/corrélation/storage réels)** :
+- **EPIC 1 (attribution)** : réel, livré et audité — serveur gRPC `ui.proto` (tonic),
+  `AttributionSubsystem` branché sans modification de `killswitch/` au-delà du remplacement
+  du stub. `AskRule` non-bloquant (cache + spawn_blocking + timeout 500ms),
+  `AbnormalExitGuard` restaure automatiquement `opensnitchd` même sur crash du thread
+  serveur. `vitrail-helper` gagne `opensnitch-set-socket` (nouvelle action polkit dédiée).
+- **EPICs 3,4,5,6 (keylog/décryptage/corrélation/storage réels)** :
   non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité),
   branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant. EPIC 6 a gagné
   deux stories (6.6 purge, 6.7 détail/suppression session) pour couvrir les commandes
-  mockées en attente de vraie persistance SQLite, plus la migration des JSONL EPIC 7/2.
+  mockées en attente de vraie persistance SQLite, plus la migration des JSONL EPIC 7/2/1.
