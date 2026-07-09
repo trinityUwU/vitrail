@@ -13,15 +13,18 @@ le backlog non structuré.
 - [ ] EPIC 5 — Moteur de corrélation
 - [ ] EPIC 6 — Stockage & requêtes
 - [ ] EPIC 7 — Kill switch & réversibilité
-- [~] EPIC 8 — Contrat UI / IPC — frontend + commandes mockées livrés, streaming réel (8.4)
-      encore un émetteur factice, contrat de types généré (8.5) à vérifier
+- [~] EPIC 8 — Contrat UI / IPC — frontend + commandes complètes livrées et auditées
+      (contrat Flow complet, exclusions centralisées, CRUD alertes, recherche sauvegardée,
+      purge, tag, historique session, notifications/keylog persistés), streaming réel (8.4)
+      encore un émetteur factice, contrat de types généré (8.5) toujours manuel
 - [ ] EPIC 9 — Sécurité & durcissement
 - [ ] EPIC 10 — Packaging & distribution
 - [ ] EPIC 11 — Documentation communautaire & visibilité
 
 ## Immédiat
 
-- [ ] Rapport de l'agent d'audit de complétude (lancé 2026-07-09) à traiter.
+- [x] Rapport de l'agent d'audit de complétude (2026-07-09) traité — 3 bloquants + boutons
+      factices corrigés, `docs/EPICS.md` mis à jour (voir STATE.md).
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Discussion orchestration technique avec Chris (supervision des sous-processus,

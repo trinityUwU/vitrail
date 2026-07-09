@@ -13,7 +13,8 @@ mod shared;
 mod storage;
 
 use commands::{
-    dashboard, destinations, flows, killswitch as ks_commands, mock_data, processes, settings,
+    alerts, dashboard, destinations, flows, killswitch as ks_commands, mock_flows, processes,
+    search, settings,
 };
 use tauri::Emitter;
 
@@ -28,7 +29,7 @@ fn spawn_mock_live_flow_emitter(app: &tauri::App) {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(MOCK_LIVE_FLOW_INTERVAL_SECS));
             seq += 1;
-            let flow = mock_data::mock_live_flow(seq);
+            let flow = mock_flows::mock_live_flow(seq);
             if let Err(error) = handle.emit("vitrail://flow", &flow) {
                 eprintln!("échec d'émission de l'événement flow factice: {error}");
             }
@@ -53,6 +54,7 @@ pub fn run() {
             processes::get_process_detail,
             destinations::list_destinations,
             destinations::get_destination_detail,
+            destinations::tag_destination,
             ks_commands::activate_vitrail,
             ks_commands::deactivate_vitrail,
             ks_commands::emergency_stop,
@@ -65,10 +67,25 @@ pub fn run() {
             settings::rotate_ca,
             settings::export_config,
             settings::import_config,
-            settings::list_alert_rules,
-            settings::toggle_alert_rule,
             settings::list_sessions,
+            settings::get_session_detail,
+            settings::delete_session,
             settings::get_log_entries,
+            settings::purge_logs,
+            settings::purge_data,
+            settings::list_keylog_apps,
+            settings::add_keylog_app,
+            settings::remove_keylog_app,
+            alerts::list_alert_rules,
+            alerts::toggle_alert_rule,
+            alerts::create_alert_rule,
+            alerts::update_alert_rule,
+            alerts::delete_alert_rule,
+            alerts::list_alert_events,
+            search::save_search_query,
+            search::list_saved_queries,
+            search::delete_saved_query,
+            search::convert_query_to_alert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

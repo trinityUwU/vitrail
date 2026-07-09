@@ -44,9 +44,9 @@ export function Settings({ onNavigate }: { onNavigate: (screen: ScreenId) => voi
             {tab === "ca" && <CaTab settings={settings} onRotated={refresh} />}
             {tab === "network" && <NetworkTab settings={settings} />}
             {tab === "exclusions" && <ExclusionsTab />}
-            {tab === "retention" && <RetentionTab settings={settings} />}
+            {tab === "retention" && <RetentionTab settings={settings} onSettingsChanged={refresh} />}
             {tab === "keylog" && <KeylogTab />}
-            {tab === "notif" && <NotificationsTab settings={settings} />}
+            {tab === "notif" && <NotificationsTab settings={settings} onSettingsChanged={refresh} />}
             {tab === "about" && <AboutTab onNavigate={onNavigate} />}
           </>
         )}

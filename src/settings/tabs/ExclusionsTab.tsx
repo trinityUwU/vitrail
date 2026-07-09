@@ -2,10 +2,10 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "../../shared/components/Button";
-import { useExclusions } from "../useExclusions";
+import { useExclusionsContext } from "../../shared/hooks/useExclusionsState";
 
 export function ExclusionsTab(): ReactElement {
-  const { exclusions, addExclusion, removeExclusion } = useExclusions();
+  const { exclusions, addExclusion, removeExclusion } = useExclusionsContext();
   const [name, setName] = useState("");
   const [type, setType] = useState("processus");
 

@@ -1,7 +1,8 @@
 //! Commandes IPC pour l'écran Paramètres (UI_SPEC.md #9) et le Journal système (#11).
 
 use super::mock_data::{MONITORED_INTERFACES, NFTABLES_CHAIN};
-use super::types::{AlertRule, Exclusion, LogEntry, Session, Settings};
+use super::mock_flows;
+use super::types::{Exclusion, LogEntry, PurgeResult, Session, SessionDetail, Settings};
 
 /// EPIC 6/9 remplaceront ce mock par storage::get_settings() (config TOML utilisateur).
 #[tauri::command]
@@ -52,43 +53,6 @@ pub fn export_config() -> String {
 #[tauri::command]
 pub fn import_config(payload: String) -> Result<Settings, String> {
     serde_json::from_str(&payload).map_err(|e| e.to_string())
-}
-
-/// EPIC 5/7 remplaceront ce mock par correlation::list_alert_rules() (écran Alertes #7).
-#[tauri::command]
-pub fn list_alert_rules() -> Vec<AlertRule> {
-    vec![
-        AlertRule {
-            id: "r1".into(),
-            name: "Nouveau processus détecté".into(),
-            description: "Déclenché quand un processus jamais vu initie une connexion".into(),
-            criteria: "processus = nouveau".into(),
-            active: true,
-            trigger_count: 2,
-        },
-        AlertRule {
-            id: "r2".into(),
-            name: "Destination surveillée contactée".into(),
-            description: "Notifie si une destination taguée \"à surveiller\" est contactée".into(),
-            criteria: "destination.tag = surveillé".into(),
-            active: true,
-            trigger_count: 1,
-        },
-        AlertRule {
-            id: "r3".into(),
-            name: "Changement de visibilité inattendu".into(),
-            description: "Un processus en Métadonnées passe soudain en Déchiffré — signal de dégradation potentielle".into(),
-            criteria: "visibilité: meta -> fully".into(),
-            active: false,
-            trigger_count: 0,
-        },
-    ]
-}
-
-/// EPIC 5/7 remplaceront ce mock par correlation::toggle_alert_rule(id).
-#[tauri::command]
-pub fn toggle_alert_rule(id: String) -> bool {
-    !id.is_empty()
 }
 
 /// EPIC 6 remplacera ce mock par storage::list_sessions() (écran Historique #12).
@@ -172,4 +136,72 @@ pub fn get_log_entries() -> Vec<LogEntry> {
                 .into(),
         },
     ]
+}
+
+/// EPIC 6 remplacera ce mock par storage::purge_logs() (troncature du journal persistant).
+#[tauri::command]
+pub fn purge_logs() -> u64 {
+    get_log_entries().len() as u64
+}
+
+/// EPIC 6 remplacera ce mock par storage::purge_data(before) (DELETE ciblé + VACUUM SQLite).
+#[tauri::command]
+pub fn purge_data(before: Option<String>) -> PurgeResult {
+    match before {
+        Some(_) => PurgeResult {
+            deleted_flows: 420,
+            freed_mb: 18.6,
+        },
+        None => PurgeResult {
+            deleted_flows: mock_flows::flows().len() as u64,
+            freed_mb: 42.3,
+        },
+    }
+}
+
+/// EPIC 6 remplacera ce mock par storage::get_session(id) (flux réels de la session).
+#[tauri::command]
+pub fn get_session_detail(id: String) -> Option<SessionDetail> {
+    let session = list_sessions().into_iter().find(|s| s.id == id)?;
+    Some(SessionDetail {
+        session,
+        flows: mock_flows::flows(),
+    })
+}
+
+/// EPIC 6 remplacera ce mock par storage::delete_session(id).
+#[tauri::command]
+pub fn delete_session(id: String) {
+    let _ = id;
+}
+
+const SEED_KEYLOG_APPS: [&str; 3] = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/lib/firefox/firefox",
+    "/usr/share/code/code",
+];
+
+/// EPIC 3.5 remplacera ce mock par keylog::list_covered_apps() (config persistée).
+#[tauri::command]
+pub fn list_keylog_apps() -> Vec<String> {
+    SEED_KEYLOG_APPS.iter().map(|s| s.to_string()).collect()
+}
+
+/// EPIC 3.5 remplacera ce mock par keylog::add_covered_app(path) (injection SSLKEYLOGFILE).
+#[tauri::command]
+pub fn add_keylog_app(path: String) -> Vec<String> {
+    let mut apps = list_keylog_apps();
+    if !apps.contains(&path) {
+        apps.push(path);
+    }
+    apps
+}
+
+/// EPIC 3.5 remplacera ce mock par keylog::remove_covered_app(path).
+#[tauri::command]
+pub fn remove_keylog_app(path: String) -> Vec<String> {
+    list_keylog_apps()
+        .into_iter()
+        .filter(|a| a != &path)
+        .collect()
 }

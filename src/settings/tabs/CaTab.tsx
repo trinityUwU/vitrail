@@ -29,7 +29,11 @@ export function CaTab({ settings, onRotated }: { settings: Settings; onRotated: 
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span className="mono" style={{ fontSize: ".78rem", color: "var(--t2)" }}>{settings.caFingerprint}</span>
-          <Button variant="ghost" size="sm" onClick={() => showToast("Copié dans le presse-papiers")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void navigator.clipboard.writeText(settings.caFingerprint).then(() => showToast("Copié dans le presse-papiers"))}
+          >
             <Clipboard />
           </Button>
         </div>

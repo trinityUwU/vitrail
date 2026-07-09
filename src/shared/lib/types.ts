@@ -24,6 +24,28 @@ export interface DestinationInfo {
   pinning: boolean;
   firstSeen: string;
   lastSeen: string;
+  tag: string | null;
+}
+
+export interface HttpHeader {
+  name: string;
+  value: string;
+}
+
+export interface CertificateInfo {
+  issuer: string;
+  subject: string;
+  validFrom: string;
+  validTo: string;
+  fingerprintSha256: string;
+}
+
+export type CorrelationStatus = "ok" | "warn" | "off";
+
+export interface CorrelationSource {
+  name: string;
+  status: CorrelationStatus;
+  detail: string;
 }
 
 export interface Flow {
@@ -40,6 +62,14 @@ export interface Flow {
   method: string | null;
   path: string | null;
   status: number | null;
+  sourceIp: string;
+  sourcePort: number;
+  requestHeaders: HttpHeader[];
+  responseHeaders: HttpHeader[];
+  bodyPreview: string | null;
+  contentType: string | null;
+  certificate: CertificateInfo | null;
+  sources: CorrelationSource[];
 }
 
 export interface DashboardSummary {
@@ -114,6 +144,41 @@ export interface Settings {
   databaseSizeMb: number;
   notificationsEnabled: boolean;
   notificationSound: boolean;
+}
+
+export interface AlertEvent {
+  id: string;
+  ruleId: string;
+  flowId: string;
+  time: string;
+  summary: string;
+  visibility: FlowVisibility;
+}
+
+export interface SearchCriteria {
+  process: string | null;
+  destination: string | null;
+  port: string | null;
+  visibility: FlowVisibility | null;
+  from: string | null;
+  to: string | null;
+  text: string | null;
+}
+
+export interface SavedQuery {
+  id: string;
+  name: string;
+  criteria: SearchCriteria;
+}
+
+export interface PurgeResult {
+  deletedFlows: number;
+  freedMb: number;
+}
+
+export interface SessionDetail {
+  session: Session;
+  flows: Flow[];
 }
 
 export type ScreenId =

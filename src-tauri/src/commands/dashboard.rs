@@ -1,6 +1,7 @@
 //! Commandes IPC pour l'écran Vue d'ensemble (UI_SPEC.md #1).
 
 use super::mock_data;
+use super::mock_flows;
 use super::types::DashboardSummary;
 
 /// EPIC 5/6 remplaceront ce mock par correlation::summarize() + storage::query_summary().
@@ -8,7 +9,7 @@ use super::types::DashboardSummary;
 pub fn get_dashboard_summary() -> DashboardSummary {
     let processes = mock_data::processes();
     let destinations = mock_data::destinations();
-    let flows = mock_data::flows();
+    let flows = mock_flows::flows();
     let meta_only_count = flows
         .iter()
         .filter(|f| matches!(f.visibility, super::types::FlowVisibility::Meta))

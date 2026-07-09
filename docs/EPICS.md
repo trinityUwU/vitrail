@@ -112,6 +112,13 @@ Objectif : persistance locale, recherche performante, rétention maîtrisée.
 - **6.4** Recherche plein texte sur le contenu déchiffré stocké (body preview, headers) —
   évaluer FTS5 SQLite natif.
 - **6.5** Export (JSON/CSV) d'une plage de données pour analyse externe ou rapport.
+- **6.6** Purge de données (`purge_data`, totale ou avant une date) et purge du journal
+  système (`purge_logs`) — branchées depuis Paramètres > Rétention, Confidentialité et
+  Journal système. Actuellement mockées (comptes/volumes plausibles, pas de DELETE réel) ;
+  remplacées par de vraies requêtes SQLite + `VACUUM` avec le reste de cet EPIC.
+- **6.7** Détail et suppression d'une session d'historique (`get_session_detail`,
+  `delete_session`) — l'écran Historique affiche les flux réels d'une session au clic et
+  génère un rapport texte côté client à partir de ce détail.
 
 ## EPIC 7 — Kill switch & réversibilité
 Objectif : la garantie centrale du projet — activer/désactiver sans résidu.
@@ -134,15 +141,26 @@ Objectif : tout ce que le frontend (mockup GLM à intégrer ensuite) doit pouvoi
 piloter. Détail exhaustif dans `docs/UI_SPEC.md` — ici, la traduction en commandes Tauri.
 
 - **8.1** Commandes de lecture (`get_dashboard_summary`, `list_flows`, `get_flow_detail`,
-  `list_processes`, `get_process_detail`, `list_destinations`, `search_flows`).
+  `list_processes`, `get_process_detail`, `list_destinations`, `get_destination_detail`,
+  `search_flows`, `list_sessions`, `get_session_detail`, `get_log_entries`).
 - **8.2** Commandes de contrôle (`activate_vitrail`, `deactivate_vitrail`,
   `emergency_stop`, `get_system_status`, `verify_teardown`).
 - **8.3** Commandes de configuration (`get_settings`, `update_settings`, `add_exclusion`,
-  `remove_exclusion`, `rotate_ca`, `export_config`, `import_config`).
+  `remove_exclusion`, `rotate_ca`, `export_config`, `import_config`, `tag_destination`,
+  `purge_data`, `purge_logs`, `delete_session`, `list_keylog_apps`, `add_keylog_app`,
+  `remove_keylog_app`).
 - **8.4** Canal d'événements temps réel (Tauri events) pour le streaming de la timeline
   sans polling.
 - **8.5** Contrat de types partagé (génération de types TS depuis les structs Rust, éviter
-  toute divergence manuelle front/back).
+  toute divergence manuelle front/back). Inclut désormais, sur `Flow` : headers
+  requête/réponse, aperçu de corps, certificat MITM vu, IP/port source, et sources de
+  corrélation par flux (remplace la déduction heuristique côté composant).
+- **8.6** Commandes CRUD des règles d'alerte et de leur historique de déclenchements
+  (`list_alert_rules`, `toggle_alert_rule`, `create_alert_rule`, `update_alert_rule`,
+  `delete_alert_rule`, `list_alert_events`) — regroupées dans `commands/alerts.rs`.
+- **8.7** Commandes de requêtes de recherche sauvegardées et de conversion en alerte
+  (`save_search_query`, `list_saved_queries`, `delete_saved_query`,
+  `convert_query_to_alert`) — regroupées dans `commands/search.rs`.
 
 ## EPIC 9 — Sécurité & durcissement
 Objectif : l'outil qui inspecte le trafic ne doit pas devenir lui-même une surface

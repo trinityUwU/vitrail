@@ -2,9 +2,9 @@
 //! (chemins binaires, interfaces réseau) et alignées sur le nom de chaîne nftables réel
 //! `VITRAIL_REDIRECT`. Source unique partagée par les modules de `commands/` pour éviter
 //! toute duplication — sera supprimé quand `correlation`/`storage` produiront les données
-//! réelles (EPICs 1 à 7).
+//! réelles (EPICs 1 à 7). Les flux mockés vivent dans `mock_flows.rs` (limite de 500 lignes).
 
-use super::types::{DestinationInfo, Flow, FlowVisibility, ProcessInfo, SubsystemStatus};
+use super::types::{DestinationInfo, FlowVisibility, ProcessInfo, SubsystemStatus};
 
 pub fn processes() -> Vec<ProcessInfo> {
     vec![
@@ -113,6 +113,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:02:11".into(),
             last_seen: "14:58:44".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "cdn.jsdelivr.net".into(),
@@ -124,6 +125,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:05:33".into(),
             last_seen: "14:57:01".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "github.com".into(),
@@ -135,6 +137,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:08:22".into(),
             last_seen: "14:55:19".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "slack.com".into(),
@@ -146,6 +149,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: true,
             first_seen: "14:10:05".into(),
             last_seen: "14:58:30".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "discord.gg".into(),
@@ -157,6 +161,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: true,
             first_seen: "14:11:40".into(),
             last_seen: "14:58:50".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "spotify.com".into(),
@@ -168,6 +173,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:03:18".into(),
             last_seen: "14:58:55".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "registry-1.docker.io".into(),
@@ -179,6 +185,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:01:02".into(),
             last_seen: "14:56:33".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "crates.io".into(),
@@ -190,6 +197,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:20:11".into(),
             last_seen: "14:45:22".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "fonts.googleapis.com".into(),
@@ -201,6 +209,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:05:40".into(),
             last_seen: "14:30:15".into(),
+            tag: None,
         },
         DestinationInfo {
             domain: "play.googleapis.com".into(),
@@ -212,161 +221,7 @@ pub fn destinations() -> Vec<DestinationInfo> {
             pinning: false,
             first_seen: "14:04:10".into(),
             last_seen: "14:58:40".into(),
-        },
-    ]
-}
-
-pub fn flows() -> Vec<Flow> {
-    vec![
-        Flow {
-            id: "f0".into(),
-            timestamp: "14:58:44".into(),
-            process: "Google Chrome".into(),
-            destination: "api.google.com".into(),
-            ip: "142.250.74.238".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 45230,
-            duration_ms: 820,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/search?q=vitrail".into()),
-            status: Some(200),
-        },
-        Flow {
-            id: "f1".into(),
-            timestamp: "14:57:01".into(),
-            process: "Google Chrome".into(),
-            destination: "cdn.jsdelivr.net".into(),
-            ip: "151.101.1.229".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 18200,
-            duration_ms: 340,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/npm/lucide@latest".into()),
-            status: Some(200),
-        },
-        Flow {
-            id: "f2".into(),
-            timestamp: "14:58:30".into(),
-            process: "Slack".into(),
-            destination: "slack.com".into(),
-            ip: "34.237.168.12".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 8920,
-            duration_ms: 1200,
-            visibility: FlowVisibility::Meta,
-            method: None,
-            path: None,
-            status: None,
-        },
-        Flow {
-            id: "f3".into(),
-            timestamp: "14:58:50".into(),
-            process: "Discord".into(),
-            destination: "discord.gg".into(),
-            ip: "162.159.135.232".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 23100,
-            duration_ms: 980,
-            visibility: FlowVisibility::Meta,
-            method: None,
-            path: None,
-            status: None,
-        },
-        Flow {
-            id: "f4".into(),
-            timestamp: "14:55:19".into(),
-            process: "VS Code".into(),
-            destination: "github.com".into(),
-            ip: "140.82.121.4".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 8900,
-            duration_ms: 410,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/api/v3/repos/user/project".into()),
-            status: Some(200),
-        },
-        Flow {
-            id: "f5".into(),
-            timestamp: "14:56:33".into(),
-            process: "Docker Desktop".into(),
-            destination: "registry-1.docker.io".into(),
-            ip: "52.5.133.89".into(),
-            port: 443,
-            protocol: "TLS 1.2".into(),
-            size_bytes: 523000,
-            duration_ms: 4200,
-            visibility: FlowVisibility::Attrib,
-            method: None,
-            path: None,
-            status: None,
-        },
-        Flow {
-            id: "f6".into(),
-            timestamp: "14:58:55".into(),
-            process: "Spotify".into(),
-            destination: "spotify.com".into(),
-            ip: "35.186.224.45".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 245000,
-            duration_ms: 2100,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/audio/track/8f2k3j".into()),
-            status: Some(206),
-        },
-        Flow {
-            id: "f7".into(),
-            timestamp: "14:58:40".into(),
-            process: "Firefox".into(),
-            destination: "play.googleapis.com".into(),
-            ip: "142.250.74.174".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 3200,
-            duration_ms: 190,
-            visibility: FlowVisibility::Fully,
-            method: Some("POST".into()),
-            path: Some("/fdls/subscriptions".into()),
-            status: Some(200),
-        },
-        Flow {
-            id: "f8".into(),
-            timestamp: "14:45:22".into(),
-            process: "Node.js".into(),
-            destination: "crates.io".into(),
-            ip: "18.214.128.42".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 5600,
-            duration_ms: 260,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/api/v1/crates/serde".into()),
-            status: Some(200),
-        },
-        Flow {
-            id: "f9".into(),
-            timestamp: "14:30:15".into(),
-            process: "Google Chrome".into(),
-            destination: "fonts.googleapis.com".into(),
-            ip: "142.250.74.238".into(),
-            port: 443,
-            protocol: "TLS 1.3".into(),
-            size_bytes: 4200,
-            duration_ms: 120,
-            visibility: FlowVisibility::Fully,
-            method: Some("GET".into()),
-            path: Some("/css2?family=Outfit".into()),
-            status: Some(200),
+            tag: None,
         },
     ]
 }
@@ -415,14 +270,3 @@ pub fn subsystems(active: bool) -> Vec<SubsystemStatus> {
 
 pub const MONITORED_INTERFACES: [&str; 3] = ["wlan0", "wg0", "enp3s0"];
 pub const NFTABLES_CHAIN: &str = "VITRAIL_REDIRECT";
-
-/// Émetteur factice temporaire (EPIC 8.4) : simule un flux "live" en recyclant les
-/// templates de démo. À supprimer quand `correlation::stream_flows()` émettra les
-/// événements réels vers le frontend.
-pub(crate) fn mock_live_flow(seq: u64) -> Flow {
-    let templates = flows();
-    let idx = (seq as usize) % templates.len();
-    let mut flow = templates[idx].clone();
-    flow.id = format!("live-{seq}");
-    flow
-}

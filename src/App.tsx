@@ -4,6 +4,7 @@ import { Sidebar } from "./shared/layout/Sidebar";
 import { Topbar } from "./shared/layout/Topbar";
 import { DegradationBanner } from "./shared/layout/DegradationBanner";
 import { KillSwitchProvider } from "./shared/components/KillSwitchProvider";
+import { ExclusionsProvider } from "./shared/components/ExclusionsProvider";
 import { ToastProvider } from "./shared/components/ToastProvider";
 import { Onboarding } from "./onboarding/Onboarding";
 import { Dashboard } from "./dashboard/Dashboard";
@@ -86,7 +87,9 @@ export function App(): ReactElement {
   return (
     <ToastProvider>
       <KillSwitchProvider>
-        <AppScreens />
+        <ExclusionsProvider>
+          <AppScreens />
+        </ExclusionsProvider>
       </KillSwitchProvider>
     </ToastProvider>
   );

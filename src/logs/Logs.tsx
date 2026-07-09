@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { Clipboard, Download, Trash2 } from "lucide-react";
 import { Button } from "../shared/components/Button";
 import { useToast } from "../shared/hooks/useToast";
+import { logger } from "../shared/lib/logger";
+import { copyLogEntries, downloadLogEntries } from "./log-actions";
 import { useLogs } from "./useLogs";
 
 const SUBSYSTEMS = ["attribution", "capture", "decryption", "keylog", "killswitch"];
@@ -15,7 +17,7 @@ const LEVEL_STYLE: Record<string, string> = {
 };
 
 export function Logs(): ReactElement {
-  const { entries } = useLogs();
+  const { entries, purge } = useLogs();
   const [subFilter, setSubFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const { showToast } = useToast();
@@ -27,6 +29,29 @@ export function Logs(): ReactElement {
       ),
     [entries, subFilter, levelFilter],
   );
+
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await copyLogEntries(filtered);
+      showToast("Copié dans le presse-papiers");
+    } catch (error) {
+      logger.error({ error }, "Échec de copie du journal");
+    }
+  };
+
+  const handleExport = (): void => {
+    try {
+      downloadLogEntries(filtered);
+      showToast("Export lancé");
+    } catch (error) {
+      logger.error({ error }, "Échec d'export du journal");
+    }
+  };
+
+  const handlePurge = async (): Promise<void> => {
+    await purge();
+    showToast("Action de purge effectuée");
+  };
 
   return (
     <div>
@@ -42,9 +67,9 @@ export function Logs(): ReactElement {
           {LEVELS.map((l) => <option key={l}>{l}</option>)}
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <Button size="sm" onClick={() => showToast("Copié dans le presse-papiers")}><Clipboard /> Copier</Button>
-          <Button size="sm" onClick={() => showToast("Export lancé")}><Download /> Exporter</Button>
-          <Button variant="danger" size="sm" onClick={() => showToast("Action de purge effectuée")}><Trash2 /> Purger</Button>
+          <Button size="sm" onClick={() => void handleCopy()}><Clipboard /> Copier</Button>
+          <Button size="sm" onClick={handleExport}><Download /> Exporter</Button>
+          <Button variant="danger" size="sm" onClick={() => void handlePurge()}><Trash2 /> Purger</Button>
         </div>
       </div>
       <div className="ks-log" style={{ maxHeight: "calc(100vh - 260px)" }}>

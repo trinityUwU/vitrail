@@ -3,9 +3,8 @@ import { Activity, Ban } from "lucide-react";
 import { Button } from "../shared/components/Button";
 import { VisibilityBadge } from "../shared/components/VisibilityBadge";
 import { fmtVol } from "../shared/lib/format-utils";
-import { vitrailApi } from "../shared/lib/vitrail-api";
-import { logger } from "../shared/lib/logger";
 import { useToast } from "../shared/hooks/useToast";
+import { useExclusionsContext } from "../shared/hooks/useExclusionsState";
 import type { ProcessInfo, ScreenId } from "../shared/lib/types";
 
 interface ProcessDetailPanelProps {
@@ -15,14 +14,11 @@ interface ProcessDetailPanelProps {
 
 export function ProcessDetailPanel({ process, onNavigate }: ProcessDetailPanelProps): ReactElement {
   const { showToast } = useToast();
+  const { addExclusion } = useExclusionsContext();
 
   const handleExclude = async (): Promise<void> => {
-    try {
-      await vitrailApi.addExclusion(process.name, "processus");
-      showToast(`${process.name} ajouté aux exclusions`);
-    } catch (error) {
-      logger.error({ error }, "Échec d'ajout d'exclusion");
-    }
+    const ok = await addExclusion(process.name, "processus");
+    if (ok) showToast(`${process.name} ajouté aux exclusions`);
   };
 
   return (

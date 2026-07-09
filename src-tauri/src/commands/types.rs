@@ -36,6 +36,32 @@ pub struct DestinationInfo {
     pub pinning: bool,
     pub first_seen: String,
     pub last_seen: String,
+    pub tag: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CertificateInfo {
+    pub issuer: String,
+    pub subject: String,
+    pub valid_from: String,
+    pub valid_to: String,
+    pub fingerprint_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrelationSource {
+    pub name: String,
+    pub status: String,
+    pub detail: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +80,14 @@ pub struct Flow {
     pub method: Option<String>,
     pub path: Option<String>,
     pub status: Option<u16>,
+    pub source_ip: String,
+    pub source_port: u16,
+    pub request_headers: Vec<HttpHeader>,
+    pub response_headers: Vec<HttpHeader>,
+    pub body_preview: Option<String>,
+    pub content_type: Option<String>,
+    pub certificate: Option<CertificateInfo>,
+    pub sources: Vec<CorrelationSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,4 +181,49 @@ pub struct Settings {
     pub database_size_mb: f64,
     pub notifications_enabled: bool,
     pub notification_sound: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertEvent {
+    pub id: String,
+    pub rule_id: String,
+    pub flow_id: String,
+    pub time: String,
+    pub summary: String,
+    pub visibility: FlowVisibility,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchCriteria {
+    pub process: Option<String>,
+    pub destination: Option<String>,
+    pub port: Option<String>,
+    pub visibility: Option<FlowVisibility>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedQuery {
+    pub id: String,
+    pub name: String,
+    pub criteria: SearchCriteria,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PurgeResult {
+    pub deleted_flows: u64,
+    pub freed_mb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDetail {
+    pub session: Session,
+    pub flows: Vec<Flow>,
 }

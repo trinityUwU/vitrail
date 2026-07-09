@@ -2,12 +2,17 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "../../shared/components/Button";
-
-const SEED_KEYLOG_APPS = ["/usr/bin/google-chrome-stable", "/usr/lib/firefox/firefox", "/usr/share/code/code"];
+import { useKeylogApps } from "../useKeylogApps";
 
 export function KeylogTab(): ReactElement {
-  const [apps, setApps] = useState(SEED_KEYLOG_APPS);
+  const { apps, addApp, removeApp } = useKeylogApps();
   const [path, setPath] = useState("");
+
+  const handleAdd = (): void => {
+    if (!path.trim()) return;
+    void addApp(path.trim());
+    setPath("");
+  };
 
   return (
     <div className="settings-section active">
@@ -23,15 +28,7 @@ export function KeylogTab(): ReactElement {
           value={path}
           onChange={(e) => setPath(e.target.value)}
         />
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            if (!path.trim()) return;
-            setApps((prev) => [...prev, path.trim()]);
-            setPath("");
-          }}
-        >
+        <Button variant="primary" size="sm" onClick={handleAdd}>
           <Plus /> Ajouter
         </Button>
       </div>
@@ -40,7 +37,7 @@ export function KeylogTab(): ReactElement {
           <li className="excl-item" key={app}>
             <span className="excl-item-name mono">{app}</span>
             <span className="excl-item-type">keylog</span>
-            <Button variant="ghost" size="sm" onClick={() => setApps((prev) => prev.filter((a) => a !== app))}>
+            <Button variant="ghost" size="sm" onClick={() => void removeApp(app)}>
               <X />
             </Button>
           </li>

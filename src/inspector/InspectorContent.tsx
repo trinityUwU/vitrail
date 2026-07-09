@@ -16,6 +16,15 @@ function statusLabel(status: number): string {
   return "Moved";
 }
 
+function headerLines(headers: Flow["requestHeaders"]): ReactElement[] {
+  return headers.map((h) => (
+    <span key={h.name}>
+      {h.name}: {h.value}
+      {"\n"}
+    </span>
+  ));
+}
+
 export function InspectorContent({ flow }: { flow: Flow }): ReactElement {
   if (flow.visibility === "fully" && flow.method) {
     const status = flow.status ?? 200;
@@ -24,14 +33,12 @@ export function InspectorContent({ flow }: { flow: Flow }): ReactElement {
         <div className="section-title">Contenu déchiffré — Requête / Réponse HTTP</div>
         <div className="http-block">
           <span className="http-method">{flow.method}</span> <span className="http-path">{flow.path}</span> HTTP/1.1{"\n"}
-          Host: {flow.destination}{"\n"}
-          Accept: application/json, text/plain, */*{"\n"}
-          Connection: keep-alive{"\n\n"}
+          {headerLines(flow.requestHeaders)}
+          {"\n"}
           HTTP/1.1 <span className={`http-status ${statusClass(status)}`}>{status} {statusLabel(status)}</span>{"\n"}
-          Content-Type: application/json; charset=utf-8{"\n"}
-          Content-Length: {flow.sizeBytes}{"\n"}
-          X-Request-Id: {flow.id}-req{"\n\n"}
-          {`{"timestamp":"${flow.timestamp}","data":[...]}`}
+          {headerLines(flow.responseHeaders)}
+          {"\n"}
+          {flow.bodyPreview}
         </div>
       </div>
     );

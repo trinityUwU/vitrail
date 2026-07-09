@@ -40,32 +40,47 @@ src-tauri/                  — backend Tauri (Rust)
     shared/mod.rs                  — stub : types communs, config, logging (non implémenté)
     commands/                       — EPIC 8, seule vraie logique de cette passe
       mod.rs                        — déclaration des sous-modules
-      types.rs                      — structs serde partagées (contrat IPC)
-      mock_data.rs                   — source unique des données de démo (portées du mockup)
-      dashboard.rs / flows.rs / processes.rs / destinations.rs / killswitch.rs / settings.rs
-                                     — 24 commandes #[tauri::command], retournent des mocks
-                                       explicitement commentés (EPIC réel qui les remplacera)
+      types.rs                      — structs serde partagées (contrat IPC), inclut
+                                       HttpHeader/CertificateInfo/CorrelationSource/AlertEvent/
+                                       SearchCriteria/SavedQuery/PurgeResult/SessionDetail
+      mock_data.rs / mock_flows.rs   — données de démo (flows séparés pour rester <500 lignes)
+      dashboard.rs / flows.rs / processes.rs / destinations.rs / killswitch.rs / settings.rs /
+      alerts.rs / search.rs          — commandes #[tauri::command] (contrat complet cf.
+                                       docs/EPICS.md 8.1-8.3), mocks commentés EPIC réel
 
 src/                        — frontend React/TypeScript (Vite)
-  main.tsx / App.tsx / vite-env.d.ts — bootstrap, routage entre écrans
+  main.tsx / App.tsx / vite-env.d.ts — bootstrap, routage entre écrans, providers
+                                        (Toast/KillSwitch/Exclusions)
   dashboard/                 — écran 1 (UI_SPEC) : vue d'ensemble, métriques, top listes
   timeline/                  — écran 2 : flux temps réel, filtres, table
-  processes/                 — écran 3 : liste + détail par processus
-  destinations/              — écran 4 : liste + détail par destination
-  inspector/                  — écran 5 : détail d'un flux (contenu déchiffré/métadonnées)
-  search/                     — écran 6 : recherche avancée
-  alerts/                     — écran 7 : règles d'alerte + déclenchements
+  processes/                 — écran 3 : liste + détail par processus (exclusion centralisée)
+  destinations/              — écran 4 : liste + détail par destination (exclusion + tag)
+  inspector/                  — écran 5 : détail d'un flux — contenu/certificat/sources lus
+                                depuis le contrat `Flow` (plus rien fabriqué en JSX),
+                                copie/export réels (inspector-actions.ts)
+  search/                     — écran 6 : recherche avancée + requêtes sauvegardées
+                                (useSavedQueries.ts, search-utils.ts)
+  alerts/                     — écran 7 : CRUD règles d'alerte (AlertRuleForm.tsx) + historique
+                                réel des déclenchements (useAlertEvents.ts)
   killswitch/                  — écran 8 : panneau kill switch, sous-systèmes, arrêt d'urgence
   settings/                    — écran 9 : paramètres, 7 onglets (CA, réseau, exclusions,
-                                  rétention, keylog, notifications, à propos)
+                                  rétention, keylog, notifications, à propos) — notifications et
+                                  keylog persistés (useKeylogApps.ts), export/import réels
+                                  (config-actions.ts), purge réelle (RetentionTab)
   privacy/                     — écran 10 : confidentialité & gouvernance des données
-  logs/                        — écran 11 : journal système
-  history/                     — écran 12 : sessions passées
+  logs/                        — écran 11 : journal système, purge/copie/export réels
+                                (log-actions.ts)
+  history/                     — écran 12 : sessions passées, détail de session
+                                (SessionDetailView.tsx, useSessionDetail.ts), rapport téléchargé
+                                (history-report.ts)
   onboarding/                   — écran 13 : parcours guidé première installation
   shared/
-    components/                 — Badge, Button, EmptyState, KillSwitchProvider, Table,
-                                   ToastProvider, Toggle, VisibilityBadge
-    hooks/                       — useAlertBadge, useKillSwitchState, useToast
+    components/                 — Badge, Button, EmptyState, ExclusionsProvider,
+                                   KillSwitchProvider, Table, ToastProvider, Toggle,
+                                   VisibilityBadge
+    hooks/                       — useAlertBadge, useExclusionsState (Context partagé —
+                                    corrige la désync exclusions entre écrans),
+                                    useKillSwitchState, useToast
     layout/                      — Sidebar, Topbar, DegradationBanner, nav-items
     lib/                          — format-utils, logger, types, visibility, vitrail-api
                                     (couche d'accès IPC — invoke() vers commands/, jamais de
@@ -76,8 +91,15 @@ src/                        — frontend React/TypeScript (Vite)
 
 ## Statut d'implémentation
 
-- **EPIC 0 (fondations)** : scaffold Tauri fait, CI/CONTRIBUTING/LICENSE en place.
-- **EPIC 8 (contrat UI/IPC)** : frontend modulaire complet, 24 commandes IPC mockées,
-  streaming temps réel simulé (émetteur factice documenté comme temporaire).
+- **EPIC 0 (fondations)** : scaffold Tauri fait, CI/CONTRIBUTING/LICENSE en place (CI 0.3
+  restante).
+- **EPIC 8 (contrat UI/IPC)** : frontend modulaire complet, contrat `Flow` exhaustif (headers,
+  corps, certificat, sources de corrélation, IP/port source), toutes les commandes listées
+  dans `docs/EPICS.md` 8.1-8.3 implémentées et appelées (plus aucun bouton factice hors
+  "Régénérer la CA" qui appelle déjà `rotate_ca` — seule la partie réellement système reste
+  à faire en EPIC 4/9), streaming temps réel simulé (émetteur factice documenté comme
+  temporaire).
 - **EPICs 1-7 (attribution/capture/décryptage/keylog/corrélation/storage/killswitch réels)** :
   non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité).
+  EPIC 6 a gagné deux stories (6.6 purge, 6.7 détail/suppression session) pour couvrir les
+  commandes mockées en attente de vraie persistance SQLite.

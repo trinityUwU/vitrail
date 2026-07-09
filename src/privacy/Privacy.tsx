@@ -2,6 +2,8 @@ import type { ReactElement } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "../shared/components/Button";
 import { useToast } from "../shared/hooks/useToast";
+import { logger } from "../shared/lib/logger";
+import { vitrailApi } from "../shared/lib/vitrail-api";
 
 const FILE_LOCATIONS: Array<{ label: string; path: string }> = [
   { label: "Certificat CA (clé privée)", path: "~/.vitrail/ca/key.pem" },
@@ -13,6 +15,15 @@ const FILE_LOCATIONS: Array<{ label: string; path: string }> = [
 
 export function Privacy(): ReactElement {
   const { showToast } = useToast();
+
+  const handlePurgeAll = async (): Promise<void> => {
+    try {
+      const result = await vitrailApi.purgeData(null);
+      showToast(`${result.deletedFlows} flux supprimés, ${result.freedMb.toFixed(1)} Mo libérés`);
+    } catch (error) {
+      logger.error({ error }, "Échec de la purge totale");
+    }
+  };
 
   return (
     <div>
@@ -71,7 +82,7 @@ export function Privacy(): ReactElement {
               exportées. Cette action est irréversible.
             </div>
           </div>
-          <Button variant="danger" onClick={() => showToast("Action de purge effectuée")}>Tout purger</Button>
+          <Button variant="danger" onClick={() => void handlePurgeAll()}>Tout purger</Button>
         </div>
       </div>
     </div>

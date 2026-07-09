@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { vitrailApi } from "../shared/lib/vitrail-api";
 import { logger } from "../shared/lib/logger";
 import type { LogEntry } from "../shared/lib/types";
 
-export function useLogs(): { entries: LogEntry[] } {
+interface UseLogsResult {
+  entries: LogEntry[];
+  purge: () => Promise<void>;
+}
+
+export function useLogs(): UseLogsResult {
   const [entries, setEntries] = useState<LogEntry[]>([]);
 
   useEffect(() => {
@@ -19,5 +24,14 @@ export function useLogs(): { entries: LogEntry[] } {
     };
   }, []);
 
-  return { entries };
+  const purge = useCallback(async () => {
+    try {
+      await vitrailApi.purgeLogs();
+      setEntries([]);
+    } catch (error) {
+      logger.error({ error }, "Échec de purge du journal système");
+    }
+  }, []);
+
+  return { entries, purge };
 }
