@@ -19,9 +19,14 @@ package.json / bun.lock / tsconfig*.json / vite.config.ts / index.html — confi
 public/                     — assets statiques Tauri par défaut (icônes vite/tauri)
 Cargo.toml                  — workspace racine, membres [src-tauri, vitrail-helper]
 
-vitrail-helper/             — binaire privilégié minimal (EPIC 7/9), invoqué via pkexec
+vitrail-helper/             — binaire privilégié minimal (EPIC 7/1/4/9), invoqué via pkexec
   Cargo.toml                — aucune dépendance Tauri, crate isolé
-  src/main.rs                — allowlist stricte nft-apply/nft-flush, Command à arguments fixes
+  src/main.rs                — dispatch de l'allowlist stricte (9 sous-commandes)
+  src/validate.rs             — validation stricte des arguments avant toute action privilégiée
+  src/nft.rs                   — nft-apply/nft-flush/nft-redirect/nft-clear-redirect/
+                                  nft-set-exclusions (chaîne VITRAIL_REDIRECT, type nat)
+  src/ca.rs                     — install-ca/remove-ca (empreinte exacte, trust/update-ca-certs)
+  src/opensnitch.rs              — opensnitch-set-socket (EPIC 1)
   re.vitrail.helper.policy   — règle polkit, chemin binaire attendu /usr/local/bin/vitrail-helper
                                 (à ajuster au vrai chemin d'installation en EPIC 10)
 
@@ -63,7 +68,18 @@ src-tauri/                  — backend Tauri (Rust)
       subsystem.rs               — CaptureSubsystem (trait Subsystem), spawn/SIGTERM→SIGKILL,
                                     threads lecteurs stdout+stderr (diagnostics relayés tracing)
       events.rs                   — CapturedPacket, persistance JSONL 600 (capture_events.jsonl)
-    decryption/mod.rs          — stub EPIC 4 : orchestration PolarProxy, fail-open (non implémenté)
+    decryption/                — EPIC 4 : orchestration PolarProxy réelle (livré, audité)
+      mod.rs                    — déclaration du sous-module
+      ca.rs                      — CA rcgen, clé privée 600, empreinte SHA-256 trackée
+      polarproxy_process.rs       — PolarProxyBackend (réel + fake), confirm_listening sur
+                                     le vrai port d'écoute (bug audit corrigé)
+      abnormal_exit_guard.rs        — garde-fou anti-blackhole : retire nft-redirect si
+                                       PolarProxy meurt, retry borné, état honnête
+      output.rs                      — parsing sortie PolarProxy → DecryptedFragment/
+                                        PinningDetected (réutilise keylog::parse_ek_line)
+      exclusions.rs                   — exclusions destination (DNS→IP→nftables except),
+                                         "processus" honnêtement non appliqué au niveau réseau
+      subsystem.rs / subsystem_tests.rs — CaSubsystem + PolarProxySubsystem (trait Subsystem)
     keylog/                      — EPIC 3 : pipeline SSLKEYLOGFILE réel (livré, audité)
       mod.rs                      — déclaration du sous-module, DecryptedFragment exposé
       keyfile.rs                   — tls_keylog.log 600 (créé/tronqué à chaque activation)
@@ -201,7 +217,14 @@ src/                        — frontend React/TypeScript (Vite)
   détection honnête, injection `.desktop` réversible (snapshot/restore), première source de
   contenu réelle branchée dans `correlation/` (`Fully` désormais atteignable). Fix doublon
   5.2 (enrichissement a posteriori via `storage::flows::update_flow`).
-- **EPIC 4 (décryptage actif PolarProxy)** :
-  non commencé — module stub uniquement (`mod.rs` = un commentaire de responsabilité),
-  branché dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant. Dernier de
-  l'ordre décidé, le plus risqué (CA système, MITM, fail-open sur certificate pinning).
+- **EPIC 4 (décryptage actif PolarProxy)** : réel, livré et audité — dernier EPIC de logique
+  système. CA `rcgen`, redirection nftables NAT réelle, garde-fou anti-blackhole
+  (`confirm_listening` sur le bon port, `AbnormalExitGuard` avec retry borné et état honnête
+  si PolarProxy meurt), exclusions destination appliquées au niveau réseau. `StubSubsystem`
+  entièrement retiré du projet — les 6 étapes de la séquence kill switch (CA → nftables →
+  PolarProxy → attribution → capture → keylog) sont désormais toutes réelles. PolarProxy
+  reste une dépendance externe non bundlée (comme `tshark`), jamais testée contre le vrai
+  binaire (absent de cette machine) — validation manuelle réelle à faire par Chris.
+
+**Les 7 EPICs de logique système (1-7) sont désormais tous réels.** Restent EPIC 9
+(sécurité/durcissement), EPIC 10 (packaging), EPIC 11 (doc communautaire) — non commencés.

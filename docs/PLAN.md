@@ -498,6 +498,87 @@ un signal `decryption`/`keylog` sans réécriture, cette passe l'alimente pour d
   `NftablesBackend`/`FakeCaptureSubsystem` déjà dans le projet) — les tests ne doivent jamais
   invoquer le vrai `tshark` (absent sur certaines machines de dev/CI, y compris celle-ci).
 
+## 6nonies. EPIC 4 — Décryptage TLS actif PolarProxy (décidé 2026-07-09)
+
+Dernier domaine réel, le plus risqué du projet : CA système, redirection nftables de TOUT
+le trafic 80/443, MITM actif. Contrairement aux EPICs précédents, une régression ici peut
+casser la connectivité HTTPS de la machine ENTIÈRE (pas juste une connexion), donc le
+garde-fou de secours est non négociable, pas une amélioration optionnelle.
+
+- **CA locale (4.1)** : crate `rcgen` (pur Rust, pas de dépendance OpenSSL système). CA
+  dédiée générée dans `$XDG_DATA_HOME/vitrail/ca/` (clé privée 600, jamais réutiliser/modifier
+  une CA existante — invariant déjà posé en `docs/PLAN.md` section 5). `vitrail-helper` gagne
+  deux sous-commandes allowlistées supplémentaires : `install-ca <chemin-cert>` (déjà
+  anticipées en §6bis) et `remove-ca <fingerprint-sha256-exact>` — la suppression cible
+  TOUJOURS l'empreinte exacte de la CA installée par Vitrail (jamais un remove générique par
+  nom/chemin qui risquerait de supprimer une autre CA système). Mécanisme d'installation :
+  détecte `trust` (p11-kit, Arch/Fedora) en priorité, sinon `update-ca-certificates`
+  (Debian/Ubuntu) — état dégradé explicite si aucun des deux n'est trouvé, jamais une
+  supposition.
+- **PolarProxy — dépendance externe non bundlée** : comme `tshark` (EPIC 3), Vitrail ne gère
+  pas l'installation de PolarProxy — détection honnête (`which PolarProxy` ou chemin
+  connu) + état dégradé explicite si absent. AVANT d'implémenter le câblage CLI exact
+  (arguments, format de sortie), rechercher la vraie documentation/CLI de PolarProxy
+  (Netresec, dépôt public) plutôt que de deviner — même discipline que la récupération du
+  vrai `ui.proto` en EPIC 1 (une divergence honnêtement signalée vaut mieux qu'une
+  implémentation qui ne correspond pas au vrai outil).
+- **GARDE-FOU ABSOLU (4.2/4.3)** : la règle nftables de redirection 80/443 vers PolarProxy ne
+  doit JAMAIS rester active si PolarProxy n'est pas confirmé en train d'écouter. Mécanisme
+  requis, non négociable :
+  1. La règle de redirection n'est appliquée qu'APRÈS confirmation que PolarProxy écoute
+     réellement sur son port local (pas un lancement optimiste du process suivi
+     immédiatement de la règle nftables).
+  2. Un `AbnormalExitGuard` (même mécanisme Drop-based validé en EPIC 1 pour l'attribution)
+     déclenche le retrait IMMÉDIAT de la règle de redirection nftables (pas juste la
+     restauration d'une config tierce comme en EPIC 1 — ici c'est le trafic réseau de TOUTE
+     la machine qui est en jeu) si le process PolarProxy meurt de façon anormale, AVANT que
+     le processus Vitrail ne se termine complètement sur ce chemin.
+  3. `4.2` (redémarrage sur crash) : une tentative de relance automatique est acceptable,
+     mais tant que PolarProxy n'est pas confirmé de nouveau à l'écoute, la redirection reste
+     retirée (jamais de trafic dirigé vers un port mort).
+  Un flux HTTPS qui échoue à cause d'une redirection orpheline serait un scénario pire que le
+  gel réseau déjà pris au sérieux en EPIC 1 (bloque TOUT le trafic web, pas juste les
+  nouvelles connexions en attente d'attribution).
+- **nftables réel (4.3)** : `vitrail-helper` gagne `nft-redirect <port-local>` (ajoute des
+  règles DNAT `tcp dport {80,443} → 127.0.0.1:<port>` DANS la chaîne `VITRAIL_REDIRECT` déjà
+  créée par `nft-apply` en EPIC 7 — jamais une nouvelle chaîne, jamais de règle en dehors) et
+  `nft-clear-redirect` (retire uniquement ces règles, laisse la chaîne vide/marqueur intacte,
+  cohérent avec la sémantique "chaîne présente = kill switch actif" déjà posée en EPIC 7).
+  `<port-local>` validé côté Rust comme un `u16` non privilégié avant tout appel privilégié
+  (même discipline que la validation d'adresse socket en EPIC 1).
+- **Exclusions (4.5)** : périmètre réaliste — seules les exclusions de type destination/
+  domaine (déjà dans le contrat IPC `Exclusion{name, kind}`, `kind == "destination"`) sont
+  appliquées en amont nftables via un set nommé (`vitrail-helper` résout le domaine en IP(s)
+  localement côté Rust, transmet la liste d'IPs à une nouvelle sous-commande
+  `nft-set-exclusions <ip1,ip2,...>` qui peuple un set nftables `except` référencé par la
+  règle DNAT). Les exclusions de type `"processus"` restent hors périmètre nftables (aucun
+  moyen fiable de filtrer par processus à ce niveau réseau) — documenté explicitement comme
+  une limite connue, jamais un faux sentiment de protection.
+- **4.4 lecture sortie PolarProxy** : selon ce que la recherche CLI réelle révèle — objectif
+  produire des fragments `DecryptedFragment`/équivalent pour `correlation/` (même canal
+  `mpsc` que `keylog::DecryptedFragment`, réutilisable tel quel ou étendu légèrement) ET des
+  événements `PinningDetected` distincts (jamais mélangés avec du contenu déchiffré) écrits
+  dans `storage::events` (nouvelle table si nécessaire, même pattern que les tables
+  existantes) pour être visibles dans l'UI (écran Journal système/Confidentialité).
+- **4.6 tests** : AUCUN test d'intégration contre une vraie app à pinning réel n'est possible
+  en environnement agent (pas de device/app disponible) — couvrir par tests unitaires avec un
+  `PolarProxyBackend` fake (même pattern `NftablesBackend`/`TsharkBackend`) simulant un
+  process qui meurt pendant que la redirection est active, et vérifier que le garde-fou
+  retire bien la règle nftables dans ce scénario simulé. La validation manuelle réelle contre
+  une app à pinning reste un test à faire par Chris lui-même sur sa machine — documenter
+  clairement cette limite dans le rapport de livraison et dans STATE.md, ne jamais prétendre
+  que le fail-open a été validé en conditions réelles.
+- **Deux `Subsystem` distincts, pas un seul** : `killswitch/mod.rs` a déjà deux slots stub
+  séparés, `"ca"` et `"polarproxy"` (cf. `build_steps`) — remplace CHACUN par une vraie
+  implémentation (`CaSubsystem::start()` génère/installe la CA si absente, `stop()` ne fait
+  RIEN par défaut — désinstaller la CA à chaque désactivation serait plus agressif que
+  nécessaire et cassable si l'utilisateur veut la garder confiante entre deux sessions ;
+  documente ce choix, à confirmer avec Chris s'il préfère une désinstallation systématique.
+  `PolarProxySubsystem::start()` lance le process + confirme l'écoute + applique la
+  redirection nftables ; `stop()` retire la redirection PUIS arrête le process, ordre inverse
+  strict). La séquence CA → nftables → PolarProxy → attribution → capture → keylog câblée
+  depuis EPIC 7 devient enfin intégralement réelle sur ses 6 étapes.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

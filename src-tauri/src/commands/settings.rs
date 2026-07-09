@@ -2,18 +2,33 @@
 
 use tauri::State;
 
+use crate::decryption::{self, SystemHelperBackend};
 use crate::storage::sessions::SessionRow;
 use crate::storage::{self, StorageHandle};
 
 use super::mock_data::{MONITORED_INTERFACES, NFTABLES_CHAIN};
 use super::types::{Exclusion, LogEntry, PurgeResult, Session, SessionDetail, Settings};
 
-/// EPIC 6/9 remplaceront ce mock par storage::get_settings() (config TOML utilisateur).
+/// EPIC 6/9 remplaceront le reste de ce mock par storage::get_settings() (config TOML
+/// utilisateur) — `ca_fingerprint`/`ca_trust_store_installed` sont réels depuis EPIC 4
+/// (storage::decryption::get_ca), le reste (interfaces/rétention/BDD/notifications) reste
+/// hors périmètre de cette passe.
 #[tauri::command]
-pub fn get_settings() -> Settings {
+pub fn get_settings(storage: State<'_, StorageHandle>) -> Settings {
+    get_settings_impl(&storage)
+}
+
+fn get_settings_impl(storage: &StorageHandle) -> Settings {
+    let ca = storage::decryption::get_ca(storage).unwrap_or_else(|error| {
+        tracing::error!(error = %error, "get_settings: lecture des métadonnées CA échouée");
+        None
+    });
     Settings {
-        ca_fingerprint: "4A:2B:C1:D8:...:F1:E3:00".into(),
-        ca_trust_store_installed: true,
+        ca_fingerprint: ca
+            .as_ref()
+            .map(|meta| meta.fingerprint_sha256.clone())
+            .unwrap_or_else(|| "aucune CA générée".to_string()),
+        ca_trust_store_installed: ca.is_some(),
         nftables_chain: NFTABLES_CHAIN.into(),
         monitored_interfaces: MONITORED_INTERFACES.iter().map(|s| s.to_string()).collect(),
         retention_days: None,
@@ -29,28 +44,53 @@ pub fn update_settings(settings: Settings) -> Settings {
     settings
 }
 
-/// EPIC 4.5 remplacera ce mock par decryption::add_exclusion() (appliqué en amont nftables).
+/// EPIC 4.5 : persistance réelle + application en amont nftables pour `kind == "destination"`
+/// (résolution DNS + `nft-set-exclusions`) via `decryption::add_exclusion`. `kind ==
+/// "processus"` est persisté mais jamais appliqué au niveau nftables (limite documentée,
+/// `decryption::exclusions`).
+///
+/// Retourne `Result` (audit EPIC 4, point 5 — même pattern que `purge_data`, EPIC 6) : un échec
+/// d'application nftables (persistée mais pas vraiment appliquée au niveau réseau) doit remonter
+/// une erreur explicite au frontend, jamais un succès trompeur silencieusement dégradé en log.
 #[tauri::command]
-pub fn add_exclusion(name: String, kind: String) -> Exclusion {
-    Exclusion { name, kind }
+pub fn add_exclusion(
+    storage: State<'_, StorageHandle>,
+    name: String,
+    kind: String,
+) -> Result<Exclusion, String> {
+    decryption::add_exclusion(&storage, &SystemHelperBackend, &name, &kind).map_err(|error| {
+        tracing::error!(error = %error, name, kind, "add_exclusion échoué");
+        format!("exclusion persistée mais non appliquée au niveau réseau : {error}")
+    })?;
+    Ok(Exclusion { name, kind })
 }
 
-/// EPIC 4.5 remplacera ce mock par decryption::remove_exclusion().
+/// EPIC 4.5 : retrait réel — recalcule et repousse la liste d'IPs exclues restantes si
+/// l'exclusion retirée était de type `destination`. `Result` (point 5, même raison que
+/// `add_exclusion` ci-dessus) : un échec de réapplication nftables après retrait ne doit jamais
+/// être avalé en simple `false` sans message exploitable côté frontend.
 #[tauri::command]
-pub fn remove_exclusion(name: String) -> bool {
-    !name.is_empty()
+pub fn remove_exclusion(storage: State<'_, StorageHandle>, name: String) -> Result<(), String> {
+    decryption::remove_exclusion(&storage, &SystemHelperBackend, &name).map_err(|error| {
+        tracing::error!(error = %error, name, "remove_exclusion échoué");
+        format!("exclusion retirée du stockage mais réapplication réseau échouée : {error}")
+    })
 }
 
-/// EPIC 4.1 remplacera ce mock par decryption::rotate_ca() (génération + réinstallation CA).
+/// EPIC 4.1 : rotation réelle (retrait de l'ancienne CA par empreinte exacte, génération +
+/// installation d'une CA neuve) via `decryption::rotate_ca`.
 #[tauri::command]
-pub fn rotate_ca() -> Settings {
-    get_settings()
+pub fn rotate_ca(storage: State<'_, StorageHandle>) -> Settings {
+    if let Err(error) = decryption::rotate_ca(&storage, &SystemHelperBackend) {
+        tracing::error!(error = %error, "rotate_ca échoué");
+    }
+    get_settings_impl(&storage)
 }
 
 /// EPIC 6.5 remplacera ce mock par storage::export_config() (JSON, config uniquement).
 #[tauri::command]
-pub fn export_config() -> String {
-    serde_json::to_string_pretty(&get_settings()).unwrap_or_default()
+pub fn export_config(storage: State<'_, StorageHandle>) -> String {
+    serde_json::to_string_pretty(&get_settings_impl(&storage)).unwrap_or_default()
 }
 
 /// EPIC 6.5 remplacera ce mock par storage::import_config(payload).

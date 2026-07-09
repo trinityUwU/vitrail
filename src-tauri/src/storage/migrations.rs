@@ -28,6 +28,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "0004_flows_five_tuple_index",
         include_str!("../../migrations/0004_flows_five_tuple_index.sql"),
     ),
+    (
+        5,
+        "0005_decryption",
+        include_str!("../../migrations/0005_decryption.sql"),
+    ),
 ];
 
 pub(super) fn apply_migrations(conn: &Connection) -> Result<(), StorageError> {

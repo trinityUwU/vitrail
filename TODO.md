@@ -12,16 +12,19 @@ le backlog non structuré.
       cap_net_raw/cap_net_admin), CaptureSubsystem branché dans le kill switch
 - [x] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE) — tshark en sous-processus (non
       réinventé), injection .desktop réversible, visibilité Fully réelle pour la première fois
-- [ ] EPIC 4 — Décryptage TLS actif (PolarProxy, fail-open)
+- [x] EPIC 4 — Décryptage TLS actif (PolarProxy) — CA rcgen, redirection nftables NAT,
+      garde-fou anti-blackhole (confirm_listening sur le bon port, retry+état honnête si
+      PolarProxy meurt), exclusions destination réelles ; process externe non bundlé
+      (comme tshark), CLI PolarProxy non vérifiable sur cette machine (absente)
 - [x] EPIC 5 — Moteur de corrélation — fusion capture+attribution par 5-tuple/fenêtre 5s,
       visibilité Meta/Attrib réelle (Fully/Unknown prêts pour EPIC 3/4), flows/flows_fts
       alimentées, timeline temps réel réelle (remplace l'émetteur factice EPIC 8.4)
 - [x] EPIC 6 — Stockage & requêtes — SQLite WAL (rusqlite bundled), migre les 3 JSONL
       provisoires EPIC 7/2/1, purge/rétention/sessions réelles ; flows/processes/FTS5
       créées vides (alimentées en EPIC 5)
-- [~] EPIC 7 — Kill switch & réversibilité — squelette d'orchestration livré et audité
-      (7.1-7.6 couverts avec sous-systèmes stub ; CA/PolarProxy/attribution/capture/keylog
-      réels arrivent avec leurs EPICs respectifs)
+- [x] EPIC 7 — Kill switch & réversibilité — orchestration réelle sur ses 6 étapes (CA,
+      nftables, PolarProxy, attribution, capture, keylog) — tous les StubSubsystem
+      remplacés par du réel, plus aucun stub dans la séquence d'activation
 - [~] EPIC 8 — Contrat UI / IPC — frontend + commandes complètes livrées et auditées
       (contrat Flow complet, exclusions centralisées, CRUD alertes, recherche sauvegardée,
       purge, tag, historique session, notifications/keylog persistés), streaming réel (8.4)
@@ -40,7 +43,10 @@ le backlog non structuré.
 - [x] EPIC 6 (storage SQLite) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 5 (corrélation timeline) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 3 (SSLKEYLOGFILE) livré, audité, corrigé — voir STATE.md.
-- [ ] EPIC 4 — PolarProxy (MITM fail-open), dernier de l'ordre décidé, le plus risqué.
+- [x] EPIC 4 (PolarProxy) livré, audité, corrigé — voir STATE.md. Les 7 EPICs de logique
+      système (1-7) sont maintenant tous réels. **Validation manuelle du fail-open réel
+      contre une app à pinning connu reste à faire par Chris** (impossible en environnement
+      agent, cf. STATE.md).
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").

@@ -1,6 +1,6 @@
 //! Point d'entrée Tauri — monte les commandes IPC et démarre le moteur de corrélation.
-//! Domaines réels : attribution (EPIC 1), capture (EPIC 2), storage (EPIC 6), killswitch
-//! (EPIC 7), correlation (EPIC 5). `decryption`/`keylog` restent stubés (EPIC 3/4 à venir).
+//! Tous les domaines sont réels : attribution (EPIC 1), capture (EPIC 2), keylog (EPIC 3),
+//! decryption/PolarProxy (EPIC 4), corrélation (EPIC 5), storage (EPIC 6), killswitch (EPIC 7).
 
 mod attribution;
 mod capture;

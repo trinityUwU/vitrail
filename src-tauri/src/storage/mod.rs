@@ -9,6 +9,7 @@ mod error;
 mod migrations;
 
 pub mod attribution;
+pub mod decryption;
 pub mod events;
 pub mod flows;
 pub mod keylog;

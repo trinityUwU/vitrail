@@ -3,6 +3,7 @@
 
 use crate::attribution::FakeAttributionSubsystem;
 use crate::capture::FakeCaptureSubsystem;
+use crate::decryption::{FakeCaSubsystem, FakePolarProxySubsystem};
 use crate::keylog::FakeKeylogSubsystem;
 use crate::storage::StorageHandle;
 
@@ -12,7 +13,9 @@ use super::KillSwitchState;
 #[test]
 fn cent_cycles_activation_desactivation_sans_fuite() {
     let state = KillSwitchState::with_backend(
+        Box::new(FakeCaSubsystem::new()),
         Box::new(FakeNftablesBackend::new()),
+        Box::new(FakePolarProxySubsystem::new()),
         Box::new(FakeCaptureSubsystem::new()),
         Box::new(FakeAttributionSubsystem::new()),
         Box::new(FakeKeylogSubsystem::new()),

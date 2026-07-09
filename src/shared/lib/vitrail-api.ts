@@ -55,7 +55,7 @@ export const vitrailApi = {
   updateSettings: (settings: Settings): Promise<Settings> => call("update_settings", { settings }),
   addExclusion: (name: string, kind: string): Promise<Exclusion> =>
     call("add_exclusion", { name, kind }),
-  removeExclusion: (name: string): Promise<boolean> => call("remove_exclusion", { name }),
+  removeExclusion: (name: string): Promise<void> => call("remove_exclusion", { name }),
   rotateCa: (): Promise<Settings> => call("rotate_ca"),
   exportConfig: (): Promise<string> => call("export_config"),
   importConfig: (payload: string): Promise<Settings> => call("import_config", { payload }),

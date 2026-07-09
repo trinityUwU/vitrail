@@ -1,7 +1,11 @@
 //! Trait `Subsystem` — cycle de vie start/stop/is_active pour chaque domaine orchestré par
-//! le kill switch (capture, attribution, decryption, keylog, CA, PolarProxy).
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! le kill switch (capture, attribution, decryption/CA, decryption/PolarProxy, keylog).
+//!
+//! Les 6 slots sont désormais tous de vraies implémentations (EPIC 4 a remplacé les deux
+//! derniers stubs, `"ca"` et `"polarproxy"`, par `decryption::CaSubsystem`/
+//! `decryption::PolarProxySubsystem`) — le `StubSubsystem` générique posé en EPIC 7 pour
+//! amorcer la séquence 7.2/7.3 avant que les domaines réels n'existent n'a plus de raison
+//! d'être et a été retiré (aucun appelant restant).
 
 use super::KillSwitchError;
 
@@ -10,48 +14,4 @@ pub trait Subsystem: Send + Sync {
     fn start(&self) -> Result<(), KillSwitchError>;
     fn stop(&self) -> Result<(), KillSwitchError>;
     fn is_active(&self) -> bool;
-}
-
-/// Implémentation stub pour un sous-système pas encore implémenté : flip d'un booléen
-/// atomique + log `tracing`, aucune action système réelle. Permet à la séquence 7.2/7.3 de
-/// tourner de bout en bout dès maintenant (PLAN.md §6ter).
-///
-/// Décision non explicitement tranchée dans PLAN.md : la CA locale et PolarProxy sont
-/// modélisés comme des `StubSubsystem` au même titre que capture/attribution/keylog plutôt
-/// que comme des étapes ad hoc dans `sequence.rs` — uniformise le traitement succès/échec de
-/// chaque étape (même `Result`, même log) et évite un cas spécial dans l'orchestrateur.
-pub struct StubSubsystem {
-    name: &'static str,
-    active: AtomicBool,
-}
-
-impl StubSubsystem {
-    pub fn new(name: &'static str) -> Self {
-        Self {
-            name,
-            active: AtomicBool::new(false),
-        }
-    }
-}
-
-impl Subsystem for StubSubsystem {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn start(&self) -> Result<(), KillSwitchError> {
-        self.active.store(true, Ordering::SeqCst);
-        tracing::info!(subsystem = self.name, "sous-système démarré (stub)");
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), KillSwitchError> {
-        self.active.store(false, Ordering::SeqCst);
-        tracing::info!(subsystem = self.name, "sous-système arrêté (stub)");
-        Ok(())
-    }
-
-    fn is_active(&self) -> bool {
-        self.active.load(Ordering::SeqCst)
-    }
 }

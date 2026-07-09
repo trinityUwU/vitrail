@@ -18,16 +18,18 @@ mod tests;
 
 use std::sync::Mutex;
 
+use std::sync::Arc;
+
 use nftables::{NftablesBackend, SystemNftablesBackend};
 use sequence::Step;
 use snapshot::{append_event, SystemSnapshot};
-use subsystem::StubSubsystem;
 use thiserror::Error;
 
 pub use subsystem::Subsystem;
 
 use crate::attribution::AttributionSubsystem;
 use crate::capture::CaptureSubsystem;
+use crate::decryption::{CaSubsystem, HelperBackend, PolarProxySubsystem, SystemHelperBackend};
 use crate::keylog::KeylogSubsystem;
 use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
 use crate::storage::StorageHandle;
@@ -50,9 +52,9 @@ pub enum KillSwitchError {
 }
 
 struct Inner {
-    ca: StubSubsystem,
+    ca: Box<dyn Subsystem>,
     nftables: Box<dyn NftablesBackend>,
-    polarproxy: StubSubsystem,
+    polarproxy: Box<dyn Subsystem>,
     attribution: Box<dyn Subsystem>,
     capture: Box<dyn Subsystem>,
     keylog: Box<dyn Subsystem>,
@@ -84,8 +86,19 @@ impl KillSwitchState {
                 .expect("ouverture SQLite en mémoire ne doit jamais échouer")
         });
 
+        let redirect_backend: Arc<dyn HelperBackend> = Arc::new(SystemHelperBackend);
+
         Self::with_backend(
+            Box::new(CaSubsystem::new(
+                storage.clone(),
+                Box::new(SystemHelperBackend),
+            )),
             Box::new(SystemNftablesBackend),
+            Box::new(PolarProxySubsystem::new(
+                storage.clone(),
+                correlation.clone(),
+                redirect_backend,
+            )),
             Box::new(CaptureSubsystem::new(storage.clone(), correlation.clone())),
             Box::new(AttributionSubsystem::new(
                 storage.clone(),
@@ -114,8 +127,13 @@ impl KillSwitchState {
     /// `pkexec` ni aucun process privilégié réel n'est déclenché par un test. `storage` doit être
     /// une connexion en mémoire (`StorageHandle::open_in_memory()`) en test, jamais le vrai
     /// fichier.
+    #[allow(clippy::too_many_arguments)] // 6 sous-systèmes + backend nftables + storage : le
+                                         // découpage en struct de paramètres nommés serait plus lourd qu'utile pour un constructeur
+                                         // de test appelé une poignée de fois (killswitch::tests, EPIC 1/2/3/4).
     pub fn with_backend(
+        ca: Box<dyn Subsystem>,
         nftables: Box<dyn NftablesBackend>,
+        polarproxy: Box<dyn Subsystem>,
         capture: Box<dyn Subsystem>,
         attribution: Box<dyn Subsystem>,
         keylog: Box<dyn Subsystem>,
@@ -123,9 +141,9 @@ impl KillSwitchState {
     ) -> Self {
         Self {
             inner: Mutex::new(Inner {
-                ca: StubSubsystem::new("ca"),
+                ca,
                 nftables,
-                polarproxy: StubSubsystem::new("polarproxy"),
+                polarproxy,
                 attribution,
                 capture,
                 keylog,
@@ -259,8 +277,8 @@ fn capture_snapshot(inner: &Inner) -> SystemSnapshot {
 
 fn build_subsystem_refs(inner: &Inner) -> Vec<&dyn Subsystem> {
     vec![
-        &inner.ca,
-        &inner.polarproxy,
+        &*inner.ca,
+        &*inner.polarproxy,
         &*inner.attribution,
         &*inner.capture,
         &*inner.keylog,
@@ -271,9 +289,9 @@ fn build_subsystem_refs(inner: &Inner) -> Vec<&dyn Subsystem> {
 /// toutes ici (PLAN.md §6ter) — `sequence.rs` ne fait qu'itérer ce vecteur.
 fn build_steps(inner: &Inner) -> Vec<Step<'_>> {
     vec![
-        Step::Subsystem(&inner.ca),
+        Step::Subsystem(&*inner.ca),
         Step::Nftables(&*inner.nftables),
-        Step::Subsystem(&inner.polarproxy),
+        Step::Subsystem(&*inner.polarproxy),
         Step::Subsystem(&*inner.attribution),
         Step::Subsystem(&*inner.capture),
         Step::Subsystem(&*inner.keylog),

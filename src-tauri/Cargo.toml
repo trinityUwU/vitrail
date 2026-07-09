@@ -32,6 +32,8 @@ prost = "0.13"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["net"] }
+rcgen = "0.13"
+sha2 = "0.10"
 
 [dev-dependencies]
 tonic = { version = "0.12", features = ["transport"] }

@@ -1,52 +1,69 @@
-//! Binaire privilégié minimal invoqué via `pkexec` par `killswitch/nftables.rs` et
-//! `attribution/daemon_config.rs`.
+//! Binaire privilégié minimal invoqué via `pkexec` par `killswitch/nftables.rs`,
+//! `attribution/daemon_config.rs` et `decryption/` (EPIC 4).
 //!
-//! Surface volontairement étroite (décision PLAN.md §6bis/6ter/6quinquies) : trois
-//! sous-commandes fixes, aucune autre action, jamais d'interpolation shell — uniquement
-//! `std::process::Command` avec un tableau d'arguments fixe passé directement à `nft`/
-//! `systemctl`, jamais de shell intermédiaire.
+//! Surface volontairement étroite (PLAN.md §6bis/6ter/6quinquies/6nonies) : sous-commandes
+//! fixes, aucune autre action, jamais d'interpolation shell — uniquement `std::process::Command`
+//! avec un tableau d'arguments fixe, jamais de shell intermédiaire. Chaque sous-commande valide
+//! strictement ses arguments (`validate.rs`) AVANT toute action privilégiée.
 
-use std::process::{Command, ExitCode};
+mod ca;
+mod nft;
+mod opensnitch;
+mod validate;
 
-/// Code de sortie dédié à l'état dégradé "config écrite mais restart échoué" (fix robustesse
-/// EPIC 1) — distinct de `ExitCode::FAILURE` générique pour que `daemon_config.rs` puisse le
-/// reconnaître et le logger comme une divergence fichier/runtime, pas un échec total.
+use std::process::ExitCode;
+
+use ca::EXIT_NO_TRUST_MECHANISM;
+use opensnitch::SetSocketError;
+
+/// Code de sortie dédié à l'état dégradé "config écrite mais restart échoué" (EPIC 1) —
+/// distinct de `ExitCode::FAILURE` générique.
 const EXIT_CONFIG_WRITTEN_RESTART_FAILED: u8 = 2;
 
-const NFT_BIN: &str = "nft";
-const NFT_FAMILY: &str = "inet";
-const NFT_TABLE: &str = "vitrail";
-const NFT_CHAIN: &str = "VITRAIL_REDIRECT";
-const OPENSNITCH_CONFIG_PATH: &str = "/etc/opensnitchd/default-config.json";
+const USAGE: &str = "usage: vitrail-helper <nft-apply|nft-flush|opensnitch-set-socket|\
+install-ca|remove-ca|nft-redirect|nft-clear-redirect|nft-set-exclusions> [args]";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let subcommand = match args.next() {
         Some(value) => value,
         None => {
-            eprintln!("usage: vitrail-helper <nft-apply|nft-flush|opensnitch-set-socket>");
+            eprintln!("{USAGE}");
             return ExitCode::FAILURE;
         }
     };
 
     match subcommand.as_str() {
-        "nft-apply" => exit_code_from(nft_apply()),
-        "nft-flush" => exit_code_from(nft_flush()),
+        "nft-apply" => exit_code_from(nft::nft_apply()),
+        "nft-flush" => exit_code_from(nft::nft_flush()),
         "opensnitch-set-socket" => match args.next() {
             Some(socket_address) => opensnitch_set_socket_exit_code(&socket_address),
-            None => {
-                eprintln!("usage: vitrail-helper opensnitch-set-socket <adresse-socket>");
-                ExitCode::FAILURE
-            }
+            None => usage_failure("opensnitch-set-socket <adresse-socket>"),
         },
+        "install-ca" => match args.next() {
+            Some(cert_path) => install_ca_exit_code(&cert_path),
+            None => usage_failure("install-ca <chemin-cert>"),
+        },
+        "remove-ca" => match args.next() {
+            Some(fingerprint) => remove_ca_exit_code(&fingerprint),
+            None => usage_failure("remove-ca <fingerprint-sha256-exact>"),
+        },
+        "nft-redirect" => match args.next() {
+            Some(port) => nft_redirect_exit_code(&port),
+            None => usage_failure("nft-redirect <port-local>"),
+        },
+        "nft-clear-redirect" => exit_code_from(nft::nft_clear_redirect()),
+        "nft-set-exclusions" => nft_set_exclusions_exit_code(args.next().as_deref().unwrap_or("")),
         other => {
-            eprintln!(
-                "sous-commande inconnue: {other} \
-                 (attendu: nft-apply, nft-flush, opensnitch-set-socket)"
-            );
+            eprintln!("sous-commande inconnue: {other}\n{USAGE}");
             ExitCode::FAILURE
         }
     }
+}
+
+fn usage_failure(expected: &str) -> ExitCode {
+    eprintln!("usage: vitrail-helper {expected}");
+    ExitCode::FAILURE
 }
 
 fn exit_code_from(result: Result<(), String>) -> ExitCode {
@@ -59,12 +76,8 @@ fn exit_code_from(result: Result<(), String>) -> ExitCode {
     }
 }
 
-/// Traduit `opensnitch_set_socket` en code de sortie — distingue explicitement l'état dégradé
-/// "config écrite mais restart échoué" (`ConfigWrittenRestartFailed`) d'un échec total, pour que
-/// l'appelant Rust (`daemon_config.rs`) puisse logger l'incohérence de façon actionnable plutôt
-/// que la confondre avec un échec générique.
 fn opensnitch_set_socket_exit_code(socket_address: &str) -> ExitCode {
-    match opensnitch_set_socket(socket_address) {
+    match opensnitch::opensnitch_set_socket(socket_address) {
         Ok(()) => ExitCode::SUCCESS,
         Err(SetSocketError::Failed(message)) => {
             eprintln!("vitrail-helper: {message}");
@@ -80,134 +93,58 @@ fn opensnitch_set_socket_exit_code(socket_address: &str) -> ExitCode {
     }
 }
 
-/// Crée la table `inet vitrail` et la chaîne `VITRAIL_REDIRECT` (vide, hook output) si elles
-/// n'existent pas déjà. `nft add` est idempotent par nature (contrairement à `nft create`).
-fn nft_apply() -> Result<(), String> {
-    run_nft(&["add", "table", NFT_FAMILY, NFT_TABLE])?;
-    run_nft(&[
-        "add", "chain", NFT_FAMILY, NFT_TABLE, NFT_CHAIN, "{", "type", "filter", "hook", "output",
-        "priority", "0", ";", "}",
-    ])?;
-    Ok(())
-}
-
-/// Détruit la table `inet vitrail` (et donc la chaîne qu'elle contient) si elle existe.
-/// Idempotent : ne doit pas échouer si la table est déjà absente.
-fn nft_flush() -> Result<(), String> {
-    if !table_exists()? {
-        return Ok(());
+fn install_ca_exit_code(cert_path: &str) -> ExitCode {
+    if let Err(message) = validate::validate_file_path(cert_path) {
+        eprintln!("vitrail-helper: {message}");
+        return ExitCode::FAILURE;
     }
-    run_nft(&["delete", "table", NFT_FAMILY, NFT_TABLE])
-}
-
-fn table_exists() -> Result<bool, String> {
-    let output = Command::new(NFT_BIN)
-        .args(["list", "table", NFT_FAMILY, NFT_TABLE])
-        .output()
-        .map_err(|error| format!("échec d'exécution de `nft list table`: {error}"))?;
-    Ok(output.status.success())
-}
-
-fn run_nft(args: &[&str]) -> Result<(), String> {
-    let output = Command::new(NFT_BIN)
-        .args(args)
-        .output()
-        .map_err(|error| format!("échec d'exécution de `nft {}`: {error}", args.join(" ")))?;
-
-    if output.status.success() {
-        return Ok(());
+    match ca::install_ca(cert_path) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(ca::InstallError::Failed(message)) => {
+            eprintln!("vitrail-helper: {message}");
+            ExitCode::FAILURE
+        }
+        Err(ca::InstallError::NoTrustMechanism(message)) => {
+            eprintln!("vitrail-helper: {message}");
+            ExitCode::from(EXIT_NO_TRUST_MECHANISM)
+        }
     }
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(format!(
-        "`nft {}` a échoué (code {}): {}",
-        args.join(" "),
-        output.status.code().unwrap_or(-1),
-        stderr.trim()
-    ))
 }
 
-/// État dégradé distinct d'un échec total (fix robustesse EPIC 1) : `ConfigWrittenRestartFailed`
-/// signale que le fichier de config a déjà été écrit avec la nouvelle adresse mais que le
-/// restart n'a pas suivi — fichier et runtime `opensnitchd` divergent jusqu'à un restart externe.
-enum SetSocketError {
-    Failed(String),
-    ConfigWrittenRestartFailed(String),
-}
-
-/// Édite `Server.Address` dans `/etc/opensnitchd/default-config.json` puis redémarre
-/// `opensnitchd` (PLAN.md §6quinquies). Validation stricte du chemin socket AVANT toute
-/// écriture — jamais d'exécution shell arbitraire, jamais d'interpolation. Le restart doit
-/// suivre l'écriture (il relit le fichier au démarrage) : à partir du moment où le fichier est
-/// écrit, un échec de restart n'est PLUS un échec total mais un état dégradé signalé à part.
-fn opensnitch_set_socket(socket_address: &str) -> Result<(), SetSocketError> {
-    validate_socket_address(socket_address).map_err(SetSocketError::Failed)?;
-
-    let content = std::fs::read_to_string(OPENSNITCH_CONFIG_PATH).map_err(|error| {
-        SetSocketError::Failed(format!(
-            "lecture de {OPENSNITCH_CONFIG_PATH} échouée: {error}"
-        ))
-    })?;
-    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|error| {
-        SetSocketError::Failed(format!(
-            "parsing JSON de {OPENSNITCH_CONFIG_PATH} échoué: {error}"
-        ))
-    })?;
-
-    let server = json.get_mut("Server").ok_or_else(|| {
-        SetSocketError::Failed("champ 'Server' absent de la config opensnitchd".to_string())
-    })?;
-    server["Address"] = serde_json::Value::String(socket_address.to_string());
-
-    let serialized = serde_json::to_string_pretty(&json)
-        .map_err(|error| SetSocketError::Failed(format!("sérialisation JSON échouée: {error}")))?;
-    std::fs::write(OPENSNITCH_CONFIG_PATH, serialized).map_err(|error| {
-        SetSocketError::Failed(format!(
-            "écriture de {OPENSNITCH_CONFIG_PATH} échouée: {error}"
-        ))
-    })?;
-
-    // Point de non-retour : le fichier reflète déjà la nouvelle adresse. Toute erreur à partir
-    // d'ici est une divergence fichier/runtime, jamais un échec générique indistinct.
-    run_systemctl(&["restart", "opensnitchd"]).map_err(SetSocketError::ConfigWrittenRestartFailed)
-}
-
-/// Validation stricte AVANT toute écriture ou action privilégiée : seul le format
-/// `unix:///chemin/absolu` est accepté (PLAN.md §6quinquies), aucun caractère shell, jamais
-/// de `..`. Miroir exact de `attribution::daemon_config::validate_socket_address` côté app —
-/// dupliqué volontairement (duplication accidentelle tolérée, code-standards.md DRY) : ce
-/// binaire ne dépend d'aucun crate de `src-tauri`, c'est la garantie de surface étroite.
-fn validate_socket_address(address: &str) -> Result<(), String> {
-    let invalid = || format!("adresse socket invalide, refusée: {address}");
-    let path = address.strip_prefix("unix://").ok_or_else(invalid)?;
-    if !path.starts_with('/') || path.contains("..") || path.is_empty() || path.len() > 4096 {
-        return Err(invalid());
+fn remove_ca_exit_code(fingerprint: &str) -> ExitCode {
+    if let Err(message) = validate::validate_fingerprint(fingerprint) {
+        eprintln!("vitrail-helper: {message}");
+        return ExitCode::FAILURE;
     }
-    let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '.');
-    if !path.chars().all(allowed) {
-        return Err(invalid());
-    }
-    Ok(())
+    exit_code_from(ca::remove_ca(fingerprint))
 }
 
-fn run_systemctl(args: &[&str]) -> Result<(), String> {
-    let output = Command::new("systemctl")
-        .args(args)
-        .output()
-        .map_err(|error| {
-            format!(
-                "échec d'exécution de `systemctl {}`: {error}",
-                args.join(" ")
-            )
-        })?;
-    if output.status.success() {
-        return Ok(());
+fn nft_redirect_exit_code(port: &str) -> ExitCode {
+    match validate::validate_local_port(port) {
+        Ok(parsed) => exit_code_from(nft::nft_redirect(parsed)),
+        Err(message) => {
+            eprintln!("vitrail-helper: {message}");
+            ExitCode::FAILURE
+        }
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(format!(
-        "`systemctl {}` a échoué (code {}): {}",
-        args.join(" "),
-        output.status.code().unwrap_or(-1),
-        stderr.trim()
-    ))
+}
+
+fn nft_set_exclusions_exit_code(raw: &str) -> ExitCode {
+    let ips = match validate::validate_ip_list(raw) {
+        Ok(ips) => ips,
+        Err(message) => {
+            eprintln!("vitrail-helper: {message}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let (v4, v6): (Vec<String>, Vec<String>) =
+        ips.iter()
+            .fold((Vec::new(), Vec::new()), |(mut v4, mut v6), ip| {
+                match ip {
+                    std::net::IpAddr::V4(_) => v4.push(ip.to_string()),
+                    std::net::IpAddr::V6(_) => v6.push(ip.to_string()),
+                }
+                (v4, v6)
+            });
+    exit_code_from(nft::nft_set_exclusions(&v4, &v6))
 }

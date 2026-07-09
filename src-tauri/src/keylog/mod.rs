@@ -11,7 +11,13 @@ mod parser;
 mod subsystem;
 mod tshark_process;
 
-pub use parser::DecryptedFragment;
+// `parse_ek_line` : réexporté pour `decryption/` (EPIC 4) — même précédent déjà établi que
+// `attribution::normalize_ip`/`attribution::find_desktop_file` consommés directement par
+// `keylog/` (import de fonction publique d'un autre domaine, pas de ses internes). PolarProxy
+// (via `--pcapoverip`) et le pipeline SSLKEYLOGFILE produisent tous deux un flux `tshark -T ek`
+// à interpréter de façon identique — DRY volontaire sur cette seule fonction de parsing,
+// jamais sur la logique métier des deux domaines qui restent indépendants.
+pub use parser::{parse_ek_line, DecryptedFragment};
 pub use subsystem::KeylogSubsystem;
 
 #[cfg(test)]
