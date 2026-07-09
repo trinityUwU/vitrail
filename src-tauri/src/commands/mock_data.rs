@@ -4,7 +4,7 @@
 //! toute duplication — sera supprimé quand `correlation`/`storage` produiront les données
 //! réelles (EPICs 1 à 7). Les flux mockés vivent dans `mock_flows.rs` (limite de 500 lignes).
 
-use super::types::{DestinationInfo, FlowVisibility, ProcessInfo, SubsystemStatus};
+use super::types::{DestinationInfo, FlowVisibility, ProcessInfo};
 
 pub fn processes() -> Vec<ProcessInfo> {
     vec![
@@ -222,48 +222,6 @@ pub fn destinations() -> Vec<DestinationInfo> {
             first_seen: "14:04:10".into(),
             last_seen: "14:58:40".into(),
             tag: None,
-        },
-    ]
-}
-
-pub fn subsystems(active: bool) -> Vec<SubsystemStatus> {
-    let status = if active { "ok" } else { "off" };
-    vec![
-        SubsystemStatus {
-            id: "opensnitch".into(),
-            name: "Attribution (OpenSnitch)".into(),
-            detail: "Daemon de corrélation processus/flux".into(),
-            status: status.into(),
-        },
-        SubsystemStatus {
-            id: "capture".into(),
-            name: "Capture nftables".into(),
-            detail: "Règles de redirection du trafic".into(),
-            status: status.into(),
-        },
-        SubsystemStatus {
-            id: "polarproxy".into(),
-            name: "Décryptage (PolarProxy)".into(),
-            detail: "Intercepteur TLS/MITM local".into(),
-            status: status.into(),
-        },
-        SubsystemStatus {
-            id: "keylog".into(),
-            name: "Keylog SSLKEYLOGFILE".into(),
-            detail: "Export de clés par les applications".into(),
-            status: status.into(),
-        },
-        SubsystemStatus {
-            id: "nftables".into(),
-            name: "Règles nftables".into(),
-            detail: "Chaîne VITRAIL_REDIRECT active".into(),
-            status: status.into(),
-        },
-        SubsystemStatus {
-            id: "ca".into(),
-            name: "CA installée".into(),
-            detail: "Certificat racine dans le trust store".into(),
-            status: status.into(),
         },
     ]
 }

@@ -3,6 +3,14 @@
 
 use serde::{Deserialize, Serialize};
 
+/// `SystemStatus`/`SubsystemStatus`/`TeardownReport` sont possédés par `crate::shared`
+/// (produits par `killswitch/`, EPIC 7) — ré-exportés ici tels quels pour ne pas casser le
+/// contrat IPC existant (`#[tauri::command]` dans `commands/killswitch.rs`). `SubsystemStatus`
+/// n'est jamais nommé directement via ce chemin (seulement imbriqué dans `SystemStatus`), d'où
+/// l'allow ciblé plutôt qu'un faux import mort.
+#[allow(unused_imports)]
+pub use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum FlowVisibility {
@@ -103,32 +111,6 @@ pub struct DashboardSummary {
     pub top_destinations: Vec<DestinationInfo>,
     pub degraded: bool,
     pub degraded_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubsystemStatus {
-    pub id: String,
-    pub name: String,
-    pub detail: String,
-    pub status: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemStatus {
-    pub kill_switch_state: String,
-    pub subsystems: Vec<SubsystemStatus>,
-    pub last_verification: Option<String>,
-    pub last_verification_clean: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TeardownReport {
-    pub clean: bool,
-    pub divergences: Vec<String>,
-    pub checked_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

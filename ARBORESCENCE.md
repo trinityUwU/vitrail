@@ -17,6 +17,13 @@ TODO.md                    — vue résumée des epics + backlog non structuré
 restart.sh / start.sh / stop.sh — gestion du cycle de vie dev, PID + reset logs
 package.json / bun.lock / tsconfig*.json / vite.config.ts / index.html — config Bun/Vite/TS
 public/                     — assets statiques Tauri par défaut (icônes vite/tauri)
+Cargo.toml                  — workspace racine, membres [src-tauri, vitrail-helper]
+
+vitrail-helper/             — binaire privilégié minimal (EPIC 7/9), invoqué via pkexec
+  Cargo.toml                — aucune dépendance Tauri, crate isolé
+  src/main.rs                — allowlist stricte nft-apply/nft-flush, Command à arguments fixes
+  re.vitrail.helper.policy   — règle polkit, chemin binaire attendu /usr/local/bin/vitrail-helper
+                                (à ajuster au vrai chemin d'installation en EPIC 10)
 
 docs/
   EPICS.md                  — plan d'implémentation détaillé (12 epics, stories actionnables)
@@ -36,8 +43,21 @@ src-tauri/                  — backend Tauri (Rust)
     keylog/mod.rs               — stub EPIC 3 : pipeline SSLKEYLOGFILE (non implémenté)
     correlation/mod.rs          — stub EPIC 5 : fusion des sources en timeline (non implémenté)
     storage/mod.rs               — stub EPIC 6 : SQLite WAL, rétention (non implémenté)
-    killswitch/mod.rs             — stub EPIC 7 : cycle de vie orchestré, snapshot/diff (non implémenté)
-    shared/mod.rs                  — stub : types communs, config, logging (non implémenté)
+    killswitch/                   — EPIC 7 : squelette d'orchestration réel (livré, audité)
+      mod.rs                       — KillSwitchState partagé, API publique, snapshot pré-activation
+      subsystem.rs                  — trait Subsystem + StubSubsystem (CA/PolarProxy/attribution/
+                                       capture/keylog — remplacés un par un par les EPICs réels)
+      nftables.rs                    — trait NftablesBackend, SystemNftablesBackend (pkexec réel)
+                                        + FakeNftablesBackend (tests, jamais de process réel)
+      snapshot.rs                     — SystemSnapshot horodaté, JSONL append-only 600
+                                         ($XDG_DATA_HOME/vitrail/system_events.jsonl)
+      sequence.rs                      — activate() ordre strict + arrêt au 1er échec,
+                                          deactivate() ordre inverse + retry/timeout par étape
+      verify.rs                         — diff pré/post, TeardownReport, cas "pas d'activation"
+      emergency.rs                       — arrêt d'urgence distinct, best-effort, hors séquence
+      tests.rs                            — test 7.6 : 100 cycles, FakeNftablesBackend uniquement
+    shared/mod.rs                  — types communs (SystemStatus/SubsystemStatus/TeardownReport,
+                                      frontière domaine respectée), config, logging tracing
     commands/                       — EPIC 8, seule vraie logique de cette passe
       mod.rs                        — déclaration des sous-modules
       types.rs                      — structs serde partagées (contrat IPC), inclut
@@ -99,7 +119,11 @@ src/                        — frontend React/TypeScript (Vite)
   "Régénérer la CA" qui appelle déjà `rotate_ca` — seule la partie réellement système reste
   à faire en EPIC 4/9), streaming temps réel simulé (émetteur factice documenté comme
   temporaire).
-- **EPICs 1-7 (attribution/capture/décryptage/keylog/corrélation/storage/killswitch réels)** :
-  non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité).
-  EPIC 6 a gagné deux stories (6.6 purge, 6.7 détail/suppression session) pour couvrir les
-  commandes mockées en attente de vraie persistance SQLite.
+- **EPIC 7 (kill switch)** : squelette d'orchestration réel livré, audité, corrigé —
+  7.1 à 7.6 couverts avec des `StubSubsystem` pour CA/PolarProxy/attribution/capture/keylog.
+  `vitrail-helper` + polkit posent la base d'élévation de privilèges pour EPIC 9.2.
+- **EPICs 1,2,3,4,5,6 (attribution/capture/keylog/décryptage/corrélation/storage réels)** :
+  non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité),
+  branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant. EPIC 6 a gagné
+  deux stories (6.6 purge, 6.7 détail/suppression session) pour couvrir les commandes
+  mockées en attente de vraie persistance SQLite, plus la migration du JSONL EPIC 7.

@@ -201,6 +201,43 @@ zéro-résidu déjà posé en section 5) ; app Tauri lancée root (violerait le 
 de façon injustifiable pour une app dont l'essentiel du travail — UI, corrélation, lecture —
 n'a besoin d'aucun privilège).
 
+## 6ter. Squelette d'orchestration EPIC 7 (décidé 2026-07-09)
+
+Démarrage de l'implémentation réelle (EPICs 1-7) dans l'ordre déjà acté : kill switch
+d'abord, en squelette, car aucun sous-système (capture, attribution, decryption, keylog)
+n'existe encore. Le squelette doit permettre à chaque EPIC suivant de brancher sa vraie
+logique sans toucher au code d'orchestration.
+
+- **Workspace Cargo** : `vitrail-helper` devient un second membre d'un workspace Cargo
+  racine (`/Cargo.toml` avec `[workspace] members = ["src-tauri", "vitrail-helper"]`),
+  binaire minimal, aucune dépendance Tauri. Surface volontairement étroite : sous-commandes
+  fixes (`nft-apply`, `nft-flush`), arguments passés en tableau (`std::process::Command`,
+  jamais d'interpolation shell), refus de toute autre opération — le binaire ne fait QUE ce
+  que son nom dit, c'est la garantie de sécurité qui justifie l'élévation polkit. Le fichier
+  `.policy` (`re.vitrail.helper.policy`) référence le chemin absolu du binaire installé.
+- **Trait `Subsystem`** (`killswitch/subsystem.rs`) : `start()`/`stop()`/`is_active()`/
+  `name()`. Chaque domaine (`capture`, `attribution`, `decryption`, `keylog`) implémentera
+  ce trait quand son EPIC arrive — en attendant, une implémentation stub (flip d'un booléen
+  atomique + log `tracing`, pas d'action système réelle) permet à la séquence 7.2/7.3 de
+  tourner de bout en bout dès maintenant sur des sous-systèmes encore vides.
+- **Trait `NftablesBackend`** : abstraction entre la logique d'orchestration et l'exécution
+  réelle (`pkexec vitrail-helper nft-apply`), avec un `FakeNftablesBackend` en mémoire pour
+  les tests. Nécessaire pour 7.6 (100 cycles start/stop) — un test ne doit jamais déclencher
+  de vrai prompt polkit.
+- **Persistance des `system_events` avant EPIC 6** : `storage/` n'existe pas encore. Le
+  squelette écrit en JSONL append-only dans `$XDG_DATA_HOME/vitrail/system_events.jsonl`
+  (créé avec permissions 600) plutôt que d'inventer une persistance jetable. Migration vers
+  SQLite explicitement prévue en EPIC 6 (remplacement du fichier par une table, pas une
+  réécriture de la logique de snapshot).
+- **Chaîne nftables squelette** : EPIC 7 crée/détruit la table/chaîne `VITRAIL_REDIRECT` vide
+  (marqueur d'état "actif"), sans aucune règle de redirection réelle — celles-ci arrivent
+  avec EPIC 4 (PolarProxy) et EPIC 2 (capture). Un diff pré/post qui trouve la chaîne
+  toujours présente après désactivation est donc déjà un signal exploitable dès ce squelette.
+- **CA et PolarProxy dans la séquence 7.2** : tant qu'EPIC 4 n'existe pas, ces étapes sont
+  des `Subsystem` stub (no-op) au même titre que les autres — l'ordre CA → nftables →
+  PolarProxy → attribution → capture → keylog est câblé dès maintenant pour ne pas avoir à
+  retoucher `sequence.rs` plus tard.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

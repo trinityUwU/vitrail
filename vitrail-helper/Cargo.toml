@@ -1,0 +1,9 @@
+[package]
+name = "vitrail-helper"
+version = "0.1.0"
+description = "Binaire privilégié minimal invoqué via pkexec (nftables uniquement, EPIC 7)."
+edition = "2021"
+
+[[bin]]
+name = "vitrail-helper"
+path = "src/main.rs"

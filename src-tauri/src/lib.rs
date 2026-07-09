@@ -39,8 +39,11 @@ fn spawn_mock_live_flow_emitter(app: &tauri::App) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    tracing_subscriber::fmt::init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(killswitch::KillSwitchState::new())
         .setup(|app| {
             spawn_mock_live_flow_emitter(app);
             Ok(())

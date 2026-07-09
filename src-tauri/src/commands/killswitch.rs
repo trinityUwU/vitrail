@@ -1,60 +1,32 @@
-//! Commandes IPC pour le panneau Kill Switch (UI_SPEC.md #8).
+//! Commandes IPC pour le panneau Kill Switch (UI_SPEC.md #8). Délègue intégralement à
+//! `killswitch::KillSwitchState` (EPIC 7) — aucune logique métier ici, agrégation pure.
 
-use super::mock_data;
 use super::types::{SystemStatus, TeardownReport};
+use crate::killswitch::KillSwitchState;
 
-/// EPIC 7.2 remplacera ce mock par killswitch::activate() (séquence orchestrée réelle).
 #[tauri::command]
-pub fn activate_vitrail() -> SystemStatus {
-    SystemStatus {
-        kill_switch_state: "active".into(),
-        subsystems: mock_data::subsystems(true),
-        last_verification: Some("14:58:22".into()),
-        last_verification_clean: true,
-    }
+pub fn activate_vitrail(state: tauri::State<'_, KillSwitchState>) -> SystemStatus {
+    state.activate()
 }
 
-/// EPIC 7.3 remplacera ce mock par killswitch::deactivate() (séquence inverse + diff).
 #[tauri::command]
-pub fn deactivate_vitrail() -> SystemStatus {
-    SystemStatus {
-        kill_switch_state: "inactive".into(),
-        subsystems: mock_data::subsystems(false),
-        last_verification: Some("14:58:22".into()),
-        last_verification_clean: true,
-    }
+pub fn deactivate_vitrail(state: tauri::State<'_, KillSwitchState>) -> SystemStatus {
+    state.deactivate()
 }
 
-/// EPIC 7.5 remplacera ce mock par killswitch::emergency_stop() (best-effort, hors séquence).
-/// Description corrigée (MOCKUP_REVIEW.md #3) : "Force la désactivation immédiate de tous
-/// les sous-systèmes sans séquence orchestrée."
+/// "Force la désactivation immédiate de tous les sous-systèmes sans séquence orchestrée."
+/// (description corrigée, MOCKUP_REVIEW.md #3).
 #[tauri::command]
-pub fn emergency_stop() -> SystemStatus {
-    SystemStatus {
-        kill_switch_state: "inactive".into(),
-        subsystems: mock_data::subsystems(false),
-        last_verification: None,
-        last_verification_clean: false,
-    }
+pub fn emergency_stop(state: tauri::State<'_, KillSwitchState>) -> SystemStatus {
+    state.emergency_stop()
 }
 
-/// EPIC 7 remplacera ce mock par killswitch::current_status().
 #[tauri::command]
-pub fn get_system_status() -> SystemStatus {
-    SystemStatus {
-        kill_switch_state: "active".into(),
-        subsystems: mock_data::subsystems(true),
-        last_verification: Some("14:58:22".into()),
-        last_verification_clean: true,
-    }
+pub fn get_system_status(state: tauri::State<'_, KillSwitchState>) -> SystemStatus {
+    state.current_status()
 }
 
-/// EPIC 7.4 remplacera ce mock par killswitch::verify_teardown() (diff snapshot pré/post).
 #[tauri::command]
-pub fn verify_teardown() -> TeardownReport {
-    TeardownReport {
-        clean: true,
-        divergences: vec![],
-        checked_at: "14:58:22".into(),
-    }
+pub fn verify_teardown(state: tauri::State<'_, KillSwitchState>) -> TeardownReport {
+    state.verify_teardown()
 }
