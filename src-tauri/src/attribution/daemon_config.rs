@@ -5,16 +5,12 @@
 //! <adresse>` (PLAN.md §6quinquies) — jamais d'écriture directe du fichier depuis l'app.
 
 use std::fs;
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::killswitch::KillSwitchError;
+use crate::storage::{self, StorageHandle};
 
 const CONFIG_PATH: &str = "/etc/opensnitchd/default-config.json";
 const DEFAULT_HELPER_PATH: &str = "/usr/local/bin/vitrail-helper";
@@ -171,73 +167,30 @@ pub fn validate_socket_address(address: &str) -> Result<(), KillSwitchError> {
     Ok(())
 }
 
-// --- Persistance provisoire de l'adresse d'origine (stories 1.1/1.6) ---
+// --- Persistance de l'adresse d'origine (stories 1.1/1.6) ---
+// EPIC 6 : remplace `attribution_state.jsonl` par `storage::attribution` (table
+// `attribution_state`), même comportement observable (dernière ligne valide relue).
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct OriginalAddressRecord {
-    timestamp_unix: u64,
-    original_address: String,
-}
-
-fn state_path() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            PathBuf::from(home).join(".local/share")
-        });
-    base.join("vitrail").join("attribution_state.jsonl")
-}
-
-/// Sauvegarde l'adresse d'origine AVANT toute reconfiguration (append-only JSONL, 600 — même
-/// pattern que `killswitch::snapshot::append_event`). Ne remplace jamais une entrée : la
-/// restauration relit toujours la DERNIÈRE ligne valide.
-pub fn save_original_address(original_address: &str) -> Result<(), KillSwitchError> {
-    let path = state_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            tracing::error!(error = %error, "création du dossier attribution_state échouée");
-            KillSwitchError::Persistence(error.to_string())
-        })?;
-    }
-
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(0o600)
-        .open(&path)
-        .map_err(|error| {
-            tracing::error!(error = %error, path = %path.display(), "ouverture de attribution_state.jsonl échouée");
-            KillSwitchError::Persistence(error.to_string())
-        })?;
-
-    let record = OriginalAddressRecord {
-        timestamp_unix: now_unix(),
-        original_address: original_address.to_string(),
-    };
-    let line = serde_json::to_string(&record)
-        .map_err(|error| KillSwitchError::Persistence(error.to_string()))?;
-    writeln!(file, "{line}").map_err(|error| {
-        tracing::error!(error = %error, "écriture dans attribution_state.jsonl échouée");
+/// Sauvegarde l'adresse d'origine AVANT toute reconfiguration. Ne remplace jamais une entrée :
+/// la restauration relit toujours la DERNIÈRE valeur insérée.
+pub fn save_original_address(
+    storage: &StorageHandle,
+    original_address: &str,
+) -> Result<(), KillSwitchError> {
+    storage::attribution::save_origin_socket(storage, original_address).map_err(|error| {
+        tracing::error!(error = %error, "sauvegarde de l'adresse d'origine opensnitchd (storage) échouée");
         KillSwitchError::Persistence(error.to_string())
     })
 }
 
-/// Relit la dernière adresse d'origine sauvegardée (dernière ligne valide du JSONL).
-pub fn read_last_original_address() -> Option<String> {
-    let content = fs::read_to_string(state_path()).ok()?;
-    content
-        .lines()
-        .rev()
-        .find_map(|line| serde_json::from_str::<OriginalAddressRecord>(line).ok())
-        .map(|r| r.original_address)
-}
-
-fn now_unix() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+/// Relit la dernière adresse d'origine sauvegardée.
+pub fn read_last_original_address(storage: &StorageHandle) -> Option<String> {
+    storage::attribution::read_origin_socket(storage)
+        .inspect_err(|error| {
+            tracing::error!(error = %error, "lecture de l'adresse d'origine opensnitchd (storage) échouée");
+        })
+        .ok()
+        .flatten()
 }
 
 /// Variante testable — jamais de `pkexec`/`systemctl` ni d'accès à `/etc/opensnitchd/` réel

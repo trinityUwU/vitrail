@@ -327,6 +327,62 @@ dans `docs/EPICS.md` (EPIC 1) : `attribution/` implémente le **serveur** gRPC `
   `CaptureSubsystem`), remplace le stub "attribution" dans `killswitch/subsystem.rs` sans
   modification de l'orchestration.
 
+## 6sexies. EPIC 6 — Stockage & requêtes (décidé 2026-07-09)
+
+Troisième domaine réel. Remplace les persistances JSONL provisoires posées en EPIC 7/2/1
+(`system_events.jsonl`, `capture_events.jsonl`, état socket attribution) par une vraie base
+SQLite, sans changer le comportement observable de ces domaines (mêmes tests verts).
+
+- **Crate : `rusqlite`, feature `bundled`** (SQLite statiquement lié, aucune dépendance
+  système `libsqlite3-dev` — cohérent sovereignty). PRAGMA `journal_mode=WAL` à l'ouverture.
+- **Connexion** : une seule connexion applicative protégée par `Mutex` (charge attendue très
+  faible pour un outil desktop mono-utilisateur, pas besoin de pool). Chemin DB :
+  `$XDG_DATA_HOME/vitrail/vitrail.db` (créé 600, même répertoire que les anciens JSONL).
+- **Migrations** : fichiers `.sql` embarqués (`include_str!`), numérotés, exécutés dans
+  l'ordre au démarrage, version courante trackée dans une table `schema_migrations` — pas de
+  dépendance externe de migration, mécanisme volontairement simple (6.1).
+- **Schéma minimal EPIC 6** : `system_events`, `capture_events`, `attribution_state`
+  (remplacent les 3 JSONL existants, colonnes fidèles aux structs Rust déjà définies),
+  `flows` et `processes` créées vides dès maintenant (6.1 les nomme explicitement) mais pas
+  encore alimentées par de vraies données — ce sera EPIC 5 (corrélation) qui écrira dedans ;
+  ne pas essayer de faire écrire `flows`/`processes` par `capture/`/`attribution/` dans cette
+  passe, ça romprait la frontière de domaine (storage n'a pas de logique de corrélation, et
+  capture/attribution ne connaissent pas le format `Flow` unifié).
+- **Index (6.2)** : `(timestamp)` sur les 3 tables d'événements, `(pid)` sur
+  `attribution_state`, préparés maintenant même si peu de volume actuel — coût nul, évite un
+  oubli plus tard.
+- **FTS5 (6.4)** : table virtuelle FTS5 créée dans le schéma dès cette passe (`flows_fts` sur
+  les colonnes texte prévues du futur `Flow`), mais PAS encore alimentée ni branchée à une
+  commande IPC de recherche — `flows` reste mockée jusqu'à EPIC 5, chercher dedans n'aurait
+  aucun sens réel. Le schéma est prêt, le branchement viendra avec la corrélation.
+- **Rétention (6.3)** : tâche de purge basée sur `Settings.retention_days` (déjà dans le
+  contrat IPC `commands/types.rs`), supprime les lignes des 3 tables d'événements plus
+  vieilles que le seuil, `VACUUM` après purge. Déclenchée par `purge_data`/`purge_logs`
+  (6.6, déjà des commandes IPC existantes mockées à rendre réelles) — pas de tâche planifiée
+  automatique en tâche de fond dans cette passe (pas de scheduler encore dans le projet),
+  purge manuelle depuis Paramètres suffit pour l'instant, un vrai scheduler sera une story
+  ultérieure si Chris le demande.
+- **6.5 export** : pas de nouvelle commande IPC si l'export peut rester côté client comme
+  aujourd'hui (`history-report.ts` génère déjà un rapport à partir de `get_session_detail`) ;
+  si le build agent juge qu'un export brut JSON/CSV d'une plage de données a besoin d'un vrai
+  accès SQLite (probable pour de gros volumes), ajouter une commande minimale
+  `export_data_range(from, to, format) -> String` sur le même modèle que `export_config`
+  existant.
+- **6.6/6.7** : `purge_data`/`purge_logs`/`get_session_detail`/`delete_session`
+  (`commands/settings.rs`, déjà dans le contrat IPC, actuellement mockées) deviennent de
+  vraies requêtes SQLite via `storage::`. `commands/` continue à n'agréger/déléguer, jamais
+  de SQL directement dans `commands/settings.rs`.
+- **Domaines appelants** : `killswitch/snapshot.rs`, `capture/events.rs`, l'écriture d'état
+  socket dans `attribution/daemon_config.rs` appellent désormais `storage::events::*` au lieu
+  d'écrire un JSONL directement — `storage/` expose une API publique minimale par domaine
+  appelant (ex: `storage::events::record_system_event(...)`,
+  `storage::events::record_capture_packet(...)`, `storage::attribution::save_origin_socket`),
+  jamais d'accès direct à la connexion SQLite depuis l'extérieur de `storage/`. Les tests
+  existants de ces 3 domaines (100 cycles kill switch, tests capture/attribution) doivent
+  rester verts — `storage/` doit être testable en mémoire (`rusqlite` supporte
+  `Connection::open_in_memory()`), utilisé dans les tests des domaines appelants au lieu du
+  vrai fichier `vitrail.db`.
+
 ## 7. Ouvert / à trancher avec Chris
 
 - **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau

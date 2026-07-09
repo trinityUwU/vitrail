@@ -13,7 +13,9 @@ le backlog non structuré.
 - [ ] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE)
 - [ ] EPIC 4 — Décryptage TLS actif (PolarProxy, fail-open)
 - [ ] EPIC 5 — Moteur de corrélation
-- [ ] EPIC 6 — Stockage & requêtes
+- [x] EPIC 6 — Stockage & requêtes — SQLite WAL (rusqlite bundled), migre les 3 JSONL
+      provisoires EPIC 7/2/1, purge/rétention/sessions réelles ; flows/processes/FTS5
+      créées vides (alimentées en EPIC 5)
 - [~] EPIC 7 — Kill switch & réversibilité — squelette d'orchestration livré et audité
       (7.1-7.6 couverts avec sous-systèmes stub ; CA/PolarProxy/attribution/capture/keylog
       réels arrivent avec leurs EPICs respectifs)
@@ -31,7 +33,8 @@ le backlog non structuré.
 - [x] EPIC 7 (squelette kill switch) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 2 (capture réseau brute) livré, audité, corrigé — voir STATE.md.
 - [x] EPIC 1 (attribution processus) livré, audité, corrigé — voir STATE.md.
-- [ ] EPIC 6 — Storage SQLite WAL, prochain de l'ordre décidé.
+- [x] EPIC 6 (storage SQLite) livré, audité, corrigé — voir STATE.md.
+- [ ] EPIC 5 — Corrélation timeline, prochain de l'ordre décidé.
 - [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
       fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").

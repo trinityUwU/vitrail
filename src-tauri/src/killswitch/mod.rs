@@ -29,6 +29,7 @@ pub use subsystem::Subsystem;
 use crate::attribution::AttributionSubsystem;
 use crate::capture::CaptureSubsystem;
 use crate::shared::{SubsystemStatus, SystemStatus, TeardownReport};
+use crate::storage::StorageHandle;
 
 #[derive(Debug, Error)]
 pub enum KillSwitchError {
@@ -58,6 +59,7 @@ struct Inner {
     active: bool,
     last_verification: Option<TeardownReport>,
     last_verification_clean: bool,
+    storage: StorageHandle,
 }
 
 pub struct KillSwitchState {
@@ -65,23 +67,50 @@ pub struct KillSwitchState {
 }
 
 impl KillSwitchState {
+    /// Ouvre la connexion storage réelle (fichier XDG, EPIC 6) — fallback en mémoire loggé si
+    /// l'ouverture échoue, jamais de panic au démarrage de l'app pour une défaillance de
+    /// persistance (même philosophie que les erreurs de journalisation dans le reste du
+    /// domaine : dégradé et visible, pas fatal).
     pub fn new() -> Self {
+        let storage = StorageHandle::open_default().unwrap_or_else(|error| {
+            tracing::error!(
+                error = %error,
+                "ouverture de vitrail.db échouée, fallback en mémoire (persistance non garantie)"
+            );
+            StorageHandle::open_in_memory()
+                .expect("ouverture SQLite en mémoire ne doit jamais échouer")
+        });
+
         Self::with_backend(
             Box::new(SystemNftablesBackend),
-            Box::new(CaptureSubsystem::new()),
-            Box::new(AttributionSubsystem::new()),
+            Box::new(CaptureSubsystem::new(storage.clone())),
+            Box::new(AttributionSubsystem::new(storage.clone())),
+            storage,
         )
+    }
+
+    /// Handle storage partagé (même connexion, même `Mutex`) — exposé pour que `lib.rs` le
+    /// `.manage()` séparément à destination de `commands/settings.rs` (EPIC 6), sans ouvrir
+    /// une deuxième connexion vers le même fichier.
+    pub fn storage_handle(&self) -> StorageHandle {
+        self.inner
+            .lock()
+            .expect("mutex killswitch empoisonné")
+            .storage
+            .clone()
     }
 
     /// Constructeur pour les tests (7.6/EPIC 2/EPIC 1) : jamais de `SystemNftablesBackend` ni
     /// de vrais `CaptureSubsystem`/`AttributionSubsystem` en test — injecter des variantes en
     /// mémoire (`FakeNftablesBackend`, `capture::FakeCaptureSubsystem`,
     /// `attribution::FakeAttributionSubsystem`) garantit qu'aucun `pkexec` ni aucun process
-    /// privilégié réel n'est déclenché par un test.
+    /// privilégié réel n'est déclenché par un test. `storage` doit être une connexion en
+    /// mémoire (`StorageHandle::open_in_memory()`) en test, jamais le vrai fichier.
     pub fn with_backend(
         nftables: Box<dyn NftablesBackend>,
         capture: Box<dyn Subsystem>,
         attribution: Box<dyn Subsystem>,
+        storage: StorageHandle,
     ) -> Self {
         Self {
             inner: Mutex::new(Inner {
@@ -95,6 +124,7 @@ impl KillSwitchState {
                 active: false,
                 last_verification: None,
                 last_verification_clean: true,
+                storage,
             }),
         }
     }
@@ -105,7 +135,7 @@ impl KillSwitchState {
         let mut inner = self.inner.lock().expect("mutex killswitch empoisonné");
 
         let pre = capture_snapshot(&inner);
-        let _ = append_event("pre-activation", &pre);
+        let _ = append_event(&inner.storage, "pre-activation", &pre);
         inner.pre_activation_snapshot = Some(pre);
 
         let outcome = {
@@ -119,7 +149,7 @@ impl KillSwitchState {
         inner.active = outcome.is_ok();
 
         let post = capture_snapshot(&inner);
-        let _ = append_event("post-activation", &post);
+        let _ = append_event(&inner.storage, "post-activation", &post);
 
         let label = if outcome.is_ok() {
             "active"
@@ -140,7 +170,7 @@ impl KillSwitchState {
         inner.active = false;
 
         let post = capture_snapshot(&inner);
-        let _ = append_event("post-deactivation", &post);
+        let _ = append_event(&inner.storage, "post-deactivation", &post);
 
         let verification = match &inner.pre_activation_snapshot {
             Some(pre) => verify::diff(pre, &post),
@@ -171,7 +201,7 @@ impl KillSwitchState {
         inner.last_verification_clean = false;
 
         let post = capture_snapshot(&inner);
-        let _ = append_event("emergency-stop", &post);
+        let _ = append_event(&inner.storage, "emergency-stop", &post);
 
         let label = if report.unconfirmed_steps.is_empty() {
             "inactive"

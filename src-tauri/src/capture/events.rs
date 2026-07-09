@@ -1,16 +1,11 @@
-//! Persistance JSONL append-only des paquets capturés (`capture_events.jsonl`, 600) — même
-//! pattern que `killswitch::snapshot::append_event` (résolution `$XDG_DATA_HOME`, ouverture
-//! 600), transitoire avant EPIC 6/SQLite (PLAN.md §6quater). Ne réutilise pas de logique de
-//! corrélation ou de storage — ce fichier est strictement local au domaine `capture/`.
-
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::PathBuf;
+//! Persistance des paquets capturés via `storage::events::record_capture_packet` (table
+//! `capture_events`, EPIC 6 — remplace `capture_events.jsonl` posé en EPIC 2, PLAN.md
+//! §6quater/§6sexies, même comportement observable).
 
 use serde::{Deserialize, Serialize};
 
 use crate::killswitch::KillSwitchError;
+use crate::storage::{self, events::CapturePacketRecord, StorageHandle};
 
 /// Miroir du JSON Lines émis par `vitrail-capture-helper` (stories 2.2/2.3/2.4) — mêmes noms
 /// de champs en `snake_case`, aucun `rename` : le helper sérialise sans renommage.
@@ -28,50 +23,28 @@ pub struct CapturedPacket {
     pub detected_protocol: Option<String>,
 }
 
-fn events_path() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            PathBuf::from(home).join(".local/share")
-        });
-    base.join("vitrail").join("capture_events.jsonl")
-}
-
-/// Ajoute un paquet capturé au journal JSONL append-only. Erreur loggée et remontée, jamais
-/// de panic : une défaillance de persistance ne doit pas interrompre le thread de lecture
-/// stdout du helper.
-pub fn append_packet(packet: &CapturedPacket) -> Result<(), KillSwitchError> {
-    let path = events_path();
-    ensure_parent_dir(&path)?;
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(0o600)
-        .open(&path)
-        .map_err(|error| {
-            tracing::error!(error = %error, path = %path.display(), "ouverture de capture_events.jsonl échouée");
-            KillSwitchError::Persistence(error.to_string())
-        })?;
-
-    let line = serde_json::to_string(packet).map_err(|error| {
-        tracing::error!(error = %error, "sérialisation d'un paquet capturé échouée");
-        KillSwitchError::Persistence(error.to_string())
-    })?;
-
-    writeln!(file, "{line}").map_err(|error| {
-        tracing::error!(error = %error, "écriture dans capture_events.jsonl échouée");
-        KillSwitchError::Persistence(error.to_string())
-    })
-}
-
-fn ensure_parent_dir(path: &std::path::Path) -> Result<(), KillSwitchError> {
-    let Some(parent) = path.parent() else {
-        return Ok(());
+/// Persiste un paquet capturé via `storage::`. Erreur loggée et remontée, jamais de panic :
+/// une défaillance de persistance ne doit pas interrompre le thread de lecture stdout du
+/// helper.
+pub fn append_packet(
+    storage: &StorageHandle,
+    packet: &CapturedPacket,
+) -> Result<(), KillSwitchError> {
+    let record = CapturePacketRecord {
+        timestamp_unix_ms: packet.timestamp_unix_ms as i64,
+        interface: &packet.interface,
+        protocol: &packet.protocol,
+        src_ip: &packet.src_ip,
+        dst_ip: &packet.dst_ip,
+        src_port: packet.src_port,
+        dst_port: packet.dst_port,
+        bytes: packet.bytes as i64,
+        sni: packet.sni.as_deref(),
+        detected_protocol: packet.detected_protocol.as_deref(),
     };
-    fs::create_dir_all(parent).map_err(|error| {
-        tracing::error!(error = %error, path = %parent.display(), "création du dossier capture échouée");
+
+    storage::events::record_capture_packet(storage, record).map_err(|error| {
+        tracing::error!(error = %error, "persistance d'un paquet capturé (storage) échouée");
         KillSwitchError::Persistence(error.to_string())
     })
 }

@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::killswitch::{KillSwitchError, Subsystem};
+use crate::storage::StorageHandle;
 
 use super::cache::ProcessCache;
 use super::daemon_config::{
@@ -30,23 +31,29 @@ pub struct AttributionSubsystem {
     /// réservé à EPIC 8), mais accessible pour un futur `get_system_status` enrichi plutôt
     /// que de jeter l'information après le seul log `tracing::warn!` de `detect()`.
     last_detection: Mutex<Option<DaemonDetection>>,
+    storage: StorageHandle,
 }
 
 impl AttributionSubsystem {
-    pub fn new() -> Self {
-        Self::with_configurator(Box::new(SystemDaemonConfigurator))
+    pub fn new(storage: StorageHandle) -> Self {
+        Self::with_configurator(Box::new(SystemDaemonConfigurator), storage)
     }
 
     /// Constructeur pour les tests : injecte un `DaemonConfigurator` en mémoire, jamais de
     /// `pkexec`/`systemctl` réel déclenché. Le serveur gRPC lui-même reste réel (socket UNIX
-    /// local, story 1.5) — seule la reconfiguration système est mockée.
-    pub fn with_configurator(configurator: Box<dyn DaemonConfigurator>) -> Self {
+    /// local, story 1.5) — seule la reconfiguration système est mockée. `storage` doit être
+    /// une connexion en mémoire (`StorageHandle::open_in_memory()`) en test.
+    pub fn with_configurator(
+        configurator: Box<dyn DaemonConfigurator>,
+        storage: StorageHandle,
+    ) -> Self {
         Self {
             active: AtomicBool::new(false),
             handle: Mutex::new(None),
             configurator: Arc::from(configurator),
             cache: Arc::new(ProcessCache::new()),
             last_detection: Mutex::new(None),
+            storage,
         }
     }
 
@@ -73,12 +80,12 @@ impl AttributionSubsystem {
 /// rattrapage, `opensnitchd` resterait configuré indéfiniment vers un socket mort. Ne doit
 /// JAMAIS se déclencher en fonctionnement normal : le `tracing::error!` en tête est volontaire,
 /// c'est un signal d'alerte à investiguer si jamais il apparaît en log.
-fn restore_on_abnormal_exit(configurator: &dyn DaemonConfigurator) {
+fn restore_on_abnormal_exit(configurator: &dyn DaemonConfigurator, storage: &StorageHandle) {
     tracing::error!(
         "serveur gRPC attribution terminé anormalement (hors stop()) — restauration de secours \
          de la configuration opensnitchd déclenchée"
     );
-    match read_last_original_address() {
+    match read_last_original_address(storage) {
         Some(original) => {
             if let Err(error) = configurator.set_socket(&original) {
                 tracing::error!(
@@ -94,11 +101,8 @@ fn restore_on_abnormal_exit(configurator: &dyn DaemonConfigurator) {
     }
 }
 
-impl Default for AttributionSubsystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Pas d'impl `Default` : `new()` exige désormais un `StorageHandle` explicite (EPIC 6), même
+// raison que `capture::CaptureSubsystem`.
 
 impl Subsystem for AttributionSubsystem {
     fn name(&self) -> &'static str {
@@ -110,8 +114,10 @@ impl Subsystem for AttributionSubsystem {
         let target = server::socket_uri(&socket_path);
 
         let configurator_for_guard = self.configurator.clone();
-        let on_abnormal_exit: Box<dyn Fn() + Send + 'static> =
-            Box::new(move || restore_on_abnormal_exit(configurator_for_guard.as_ref()));
+        let storage_for_guard = self.storage.clone();
+        let on_abnormal_exit: Box<dyn Fn() + Send + 'static> = Box::new(move || {
+            restore_on_abnormal_exit(configurator_for_guard.as_ref(), &storage_for_guard)
+        });
 
         let handle = server::start(socket_path.clone(), self.cache.clone(), on_abnormal_exit)
             .map_err(Self::exec_error)?;
@@ -124,7 +130,7 @@ impl Subsystem for AttributionSubsystem {
         }
 
         if let Some(original) = &detection.current_address {
-            if let Err(error) = save_original_address(original) {
+            if let Err(error) = save_original_address(&self.storage, original) {
                 tracing::error!(error = %error, "sauvegarde de l'adresse d'origine opensnitchd échouée");
             }
         }
@@ -147,7 +153,7 @@ impl Subsystem for AttributionSubsystem {
     }
 
     fn stop(&self) -> Result<(), KillSwitchError> {
-        let restore_result = match read_last_original_address() {
+        let restore_result = match read_last_original_address(&self.storage) {
             Some(original) => self.configurator.set_socket(&original).map_err(|error| {
                 tracing::error!(
                     error = %error,
@@ -274,7 +280,10 @@ mod tests {
         let base = isolated_env("start");
 
         let configurator = Arc::new(FakeDaemonConfigurator::new());
-        let subsystem = AttributionSubsystem::with_configurator(Box::new(configurator.clone()));
+        let storage = crate::storage::StorageHandle::open_in_memory()
+            .expect("ouverture storage en mémoire pour le test");
+        let subsystem =
+            AttributionSubsystem::with_configurator(Box::new(configurator.clone()), storage);
 
         subsystem.start().expect("start() aurait dû réussir");
         assert!(subsystem.is_active());
@@ -321,7 +330,10 @@ mod tests {
         let base = isolated_env("restore-fail");
 
         let configurator = Arc::new(FakeDaemonConfigurator::new());
-        let subsystem = AttributionSubsystem::with_configurator(Box::new(configurator.clone()));
+        let storage = crate::storage::StorageHandle::open_in_memory()
+            .expect("ouverture storage en mémoire pour le test");
+        let subsystem =
+            AttributionSubsystem::with_configurator(Box::new(configurator.clone()), storage);
 
         subsystem.start().expect("start() aurait dû réussir");
         configurator.fail_set.store(true, AtomicOrdering::SeqCst);

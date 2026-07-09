@@ -66,7 +66,18 @@ src-tauri/                  — backend Tauri (Rust)
     decryption/mod.rs          — stub EPIC 4 : orchestration PolarProxy, fail-open (non implémenté)
     keylog/mod.rs               — stub EPIC 3 : pipeline SSLKEYLOGFILE (non implémenté)
     correlation/mod.rs          — stub EPIC 5 : fusion des sources en timeline (non implémenté)
-    storage/mod.rs               — stub EPIC 6 : SQLite WAL, rétention (non implémenté)
+    storage/                     — EPIC 6 : SQLite WAL réel (livré, audité)
+      mod.rs / connection.rs      — StorageHandle (Arc<Mutex<Connection>>), vitrail.db 600
+                                     pré-créé (pas de TOCTOU), WAL, tauri::State
+      migrations.rs                — migrations SQL embarquées, table schema_migrations
+      events.rs                     — record_system_event/record_capture_packet
+      attribution.rs                  — save_origin_socket/read_last_original_address
+      retention.rs                     — purge_data_before/purge_logs, DELETE+VACUUM
+                                          sous verrous séparés (contention limitée)
+      sessions.rs                       — list_sessions/get_session_detail/delete_session
+    src-tauri/migrations/0001_init.sql — schéma : system_events/capture_events/
+      attribution_state (+ index timestamp/pid), flows/processes vides, flows_fts (FTS5,
+      non alimentée, branchement prévu EPIC 5)
     killswitch/                   — EPIC 7 : squelette d'orchestration réel (livré, audité)
       mod.rs                       — KillSwitchState partagé, API publique, snapshot pré-activation
       subsystem.rs                  — trait Subsystem + StubSubsystem (CA/PolarProxy/attribution/
@@ -156,8 +167,10 @@ src/                        — frontend React/TypeScript (Vite)
   du stub. `AskRule` non-bloquant (cache + spawn_blocking + timeout 500ms),
   `AbnormalExitGuard` restaure automatiquement `opensnitchd` même sur crash du thread
   serveur. `vitrail-helper` gagne `opensnitch-set-socket` (nouvelle action polkit dédiée).
-- **EPICs 3,4,5,6 (keylog/décryptage/corrélation/storage réels)** :
+- **EPIC 6 (storage)** : réel, livré et audité — `rusqlite` bundled, migre les 3 JSONL
+  provisoires EPIC 7/2/1 vers de vraies tables via `storage::`, aucun accès SQLite en
+  dehors du domaine. `purge_logs`/`purge_data`/`get_session_detail`/`delete_session`/
+  `list_sessions` réels. `flows`/`processes`/`flows_fts` créées vides, alimentation EPIC 5.
+- **EPICs 3,4,5 (keylog/décryptage/corrélation réels)** :
   non commencés — modules stubs uniquement (`mod.rs` = un commentaire de responsabilité),
-  branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant. EPIC 6 a gagné
-  deux stories (6.6 purge, 6.7 détail/suppression session) pour couvrir les commandes
-  mockées en attente de vraie persistance SQLite, plus la migration des JSONL EPIC 7/2/1.
+  branchés dans `killswitch/subsystem.rs` comme `StubSubsystem` en attendant.

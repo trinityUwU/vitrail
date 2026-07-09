@@ -11,6 +11,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::killswitch::{KillSwitchError, Subsystem};
+use crate::storage::StorageHandle;
 
 use super::events::{append_packet, CapturedPacket};
 
@@ -27,13 +28,15 @@ struct RunningProcess {
 pub struct CaptureSubsystem {
     active: AtomicBool,
     running: Mutex<Option<RunningProcess>>,
+    storage: StorageHandle,
 }
 
 impl CaptureSubsystem {
-    pub fn new() -> Self {
+    pub fn new(storage: StorageHandle) -> Self {
         Self {
             active: AtomicBool::new(false),
             running: Mutex::new(None),
+            storage,
         }
     }
 
@@ -50,11 +53,8 @@ impl CaptureSubsystem {
     }
 }
 
-impl Default for CaptureSubsystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Pas d'impl `Default` : `new()` exige désormais un `StorageHandle` explicite (EPIC 6), un
+// `Default` masquerait implicitement quelle connexion storage est utilisée.
 
 impl Subsystem for CaptureSubsystem {
     fn name(&self) -> &'static str {
@@ -86,7 +86,8 @@ impl Subsystem for CaptureSubsystem {
             Self::exec_error("stderr indisponible")
         })?;
 
-        let reader = std::thread::spawn(move || read_capture_stream(stdout));
+        let storage = self.storage.clone();
+        let reader = std::thread::spawn(move || read_capture_stream(&storage, stdout));
         let stderr_reader = std::thread::spawn(move || read_stderr_stream(stderr));
 
         let mut running = self.running.lock().expect("mutex capture empoisonné");
@@ -178,7 +179,7 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
 /// Lit le stdout du helper ligne par ligne, parse chaque enregistrement JSON, persiste. Une
 /// ligne invalide est loggée et ignorée (jamais fatale) ; une erreur de lecture stoppe le
 /// thread (le pipe est de toute façon fermé si le process est mort).
-fn read_capture_stream(stdout: ChildStdout) {
+fn read_capture_stream(storage: &StorageHandle, stdout: ChildStdout) {
     let reader = BufReader::new(stdout);
     for line in reader.lines() {
         let line = match line {
@@ -193,7 +194,7 @@ fn read_capture_stream(stdout: ChildStdout) {
         }
         match serde_json::from_str::<CapturedPacket>(&line) {
             Ok(packet) => {
-                if let Err(error) = append_packet(&packet) {
+                if let Err(error) = append_packet(storage, &packet) {
                     tracing::error!(error = %error, "persistance d'un paquet capturé échouée");
                 }
             }

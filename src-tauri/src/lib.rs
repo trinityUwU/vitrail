@@ -41,9 +41,17 @@ fn spawn_mock_live_flow_emitter(app: &tauri::App) {
 pub fn run() {
     tracing_subscriber::fmt::init();
 
+    // Connexion storage ouverte une seule fois ici (migrations exécutées avant tout le reste,
+    // PLAN.md §6sexies) : `KillSwitchState::new()` l'ouvre en interne puis l'expose via
+    // `storage_handle()` pour que `commands/settings.rs` la partage (même `Arc<Mutex<...>>`,
+    // jamais une deuxième connexion vers le même fichier).
+    let killswitch_state = killswitch::KillSwitchState::new();
+    let storage_handle = killswitch_state.storage_handle();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(killswitch::KillSwitchState::new())
+        .manage(killswitch_state)
+        .manage(storage_handle)
         .setup(|app| {
             spawn_mock_live_flow_emitter(app);
             Ok(())

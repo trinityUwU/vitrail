@@ -3,6 +3,7 @@
 
 use crate::attribution::FakeAttributionSubsystem;
 use crate::capture::FakeCaptureSubsystem;
+use crate::storage::StorageHandle;
 
 use super::nftables::FakeNftablesBackend;
 use super::KillSwitchState;
@@ -13,6 +14,7 @@ fn cent_cycles_activation_desactivation_sans_fuite() {
         Box::new(FakeNftablesBackend::new()),
         Box::new(FakeCaptureSubsystem::new()),
         Box::new(FakeAttributionSubsystem::new()),
+        StorageHandle::open_in_memory().expect("ouverture storage en mémoire pour le test"),
     );
 
     for cycle in 0..100 {
