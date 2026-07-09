@@ -1,0 +1,19 @@
+/* Styles spécifiques à l'écran Inspecteur de flux — portés depuis docs/Mockup.html. */
+.insp-header { display: grid; grid-template-columns: 1fr auto; gap: 16px; margin-bottom: 20px; }
+.insp-tuple { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+.http-block {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: .76rem; background: var(--bg2); border-radius: var(--r-m);
+  padding: 16px; overflow-x: auto; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+  max-height: 400px; overflow-y: auto;
+}
+.http-method { color: var(--accent); font-weight: 700; }
+.http-path { color: var(--t1); }
+.http-status { font-weight: 700; }
+.http-status-2 { color: var(--ok); }
+.http-status-3 { color: var(--meta); }
+.http-status-4 { color: var(--warn); }
+.http-status-5 { color: var(--danger); }
+
+@media (max-width: 768px) {
+  .insp-tuple { grid-template-columns: repeat(3, 1fr); }
+}

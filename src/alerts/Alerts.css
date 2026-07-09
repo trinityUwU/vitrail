@@ -1,0 +1,7 @@
+/* Styles spécifiques à l'écran Alertes & Règles — portés depuis docs/Mockup.html. */
+.alert-rule { padding: 16px 18px; border: 1px solid var(--border-s); border-radius: var(--r-l); margin-bottom: 10px; background: var(--surface); transition: all .25s var(--ease); }
+.alert-rule:hover { border-color: var(--border); box-shadow: var(--sh-s); }
+.alert-rule-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.alert-rule-name { font-size: .85rem; font-weight: 500; flex: 1; }
+.alert-trigger { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; background: var(--bg2); border-radius: var(--r-m); margin-top: 8px; font-size: .8rem; }
+.alert-trigger-time { font-size: .7rem; color: var(--t3); white-space: nowrap; margin-top: 2px; }

@@ -1,0 +1,28 @@
+/* Styles spécifiques à l'écran Vue d'ensemble — portés depuis docs/Mockup.html. */
+.dash-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.dash-metric {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); padding: 18px 20px;
+  transition: box-shadow .25s var(--ease);
+}
+.dash-metric:hover { box-shadow: var(--sh-m); }
+.dash-metric-icon { width: 32px; height: 32px; border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.dash-metric-icon svg { width: 17px; height: 17px; }
+
+.dash-top-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.dash-bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.top-list { list-style: none; }
+.top-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-s); font-size: .82rem; }
+.top-list li:last-child { border-bottom: none; }
+.top-list-rank { width: 20px; font-size: .7rem; font-weight: 600; color: var(--t3); text-align: center; }
+.top-list-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-list-vol { font-size: .75rem; color: var(--t2); font-weight: 500; white-space: nowrap; }
+.top-list-bar { width: 60px; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+.top-list-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width .8s var(--ease); }
+
+.ks-verify-box { padding: 14px 18px; border-radius: var(--r-m); display: flex; align-items: center; gap: 10px; font-size: .8rem; }
+.ks-verify-ok { background: var(--ok-l); color: var(--ok); }
+
+@media (max-width: 1100px) {
+  .dash-metrics { grid-template-columns: repeat(2, 1fr); }
+  .dash-top-row, .dash-bottom-row { grid-template-columns: 1fr; }
+}

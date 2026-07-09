@@ -1,0 +1,20 @@
+/* Styles spécifiques à l'écran Onboarding — portés depuis docs/Mockup.html. */
+.onboard-progress { display: flex; align-items: center; gap: 0; margin-bottom: 36px; }
+.onboard-step-dot {
+  width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 600; border: 2px solid var(--border); color: var(--t3); background: var(--surface);
+  transition: all .3s var(--ease); flex-shrink: 0;
+}
+.onboard-step-dot.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.onboard-step-dot.current { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px var(--accent-l); }
+.onboard-step-line { flex: 1; height: 2px; background: var(--border); transition: background .3s var(--ease); }
+.onboard-step-line.done { background: var(--ok); }
+.onboard-card { max-width: 560px; margin: 0 auto; text-align: center; padding: 40px; }
+.onboard-card h2 { font-family: var(--font-d); font-size: 1.5rem; margin-bottom: 8px; }
+.onboard-card p { color: var(--t3); font-size: .88rem; margin-bottom: 24px; line-height: 1.7; }
+.onboard-check {
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: var(--r-m); border: 1px solid var(--border);
+  background: var(--surface); margin-bottom: 10px; text-align: left; font-size: .83rem;
+}
+.onboard-check.ok { border-color: rgba(45, 90, 61, .2); background: var(--ok-l); }
+.onboard-check.fail { border-color: rgba(184, 59, 52, .2); background: var(--danger-l); }

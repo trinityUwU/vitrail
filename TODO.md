@@ -5,7 +5,7 @@ le backlog non structuré.
 
 ## Epics (résumé — statut détaillé dans docs/EPICS.md)
 
-- [ ] EPIC 0 — Fondations projet (scaffold Tauri, CI, scripts, licence)
+- [x] EPIC 0 — Fondations projet (scaffold Tauri, CI, scripts, licence) — CI (0.3) restant
 - [ ] EPIC 1 — Attribution processus (OpenSnitch)
 - [ ] EPIC 2 — Capture réseau brute
 - [ ] EPIC 3 — Décryptage TLS coopératif (SSLKEYLOGFILE)
@@ -13,19 +13,22 @@ le backlog non structuré.
 - [ ] EPIC 5 — Moteur de corrélation
 - [ ] EPIC 6 — Stockage & requêtes
 - [ ] EPIC 7 — Kill switch & réversibilité
-- [ ] EPIC 8 — Contrat UI / IPC
+- [~] EPIC 8 — Contrat UI / IPC — frontend + commandes mockées livrés, streaming réel (8.4)
+      encore un émetteur factice, contrat de types généré (8.5) à vérifier
 - [ ] EPIC 9 — Sécurité & durcissement
 - [ ] EPIC 10 — Packaging & distribution
 - [ ] EPIC 11 — Documentation communautaire & visibilité
 
 ## Immédiat
 
+- [ ] Rapport de l'agent d'audit de complétude (lancé 2026-07-09) à traiter.
+- [ ] Décider du sort des polices (`DM Serif Display`/`Outfit`) : self-host `@fontsource` ou
+      fichiers fournis par Chris (cf. STATE.md "Ouvert").
 - [ ] Discussion orchestration technique avec Chris (supervision des sous-processus,
-      séquencement kill switch précis).
+      séquencement kill switch précis) — démarrage EPICs 1-7.
 - [ ] Confirmer périmètre réseau exact (cf. STATE.md "Ouvert").
 - [ ] Décider si/quand créer le repo GitHub distant public.
-- [ ] Mockup UI via GLM 5.2 (Chris) à partir de `docs/UI_SPEC.md`, puis intégration
-      frontend.
+- [ ] Remplacer les icônes app Tauri (encore le template par défaut).
 
 ## Backlog (non priorisé)
 

@@ -1,0 +1,48 @@
+/* Reset + base portés depuis docs/Mockup.html. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-b);
+  color: var(--t1);
+  background: var(--bg);
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100vh;
+}
+::selection { background: var(--accent-l); color: var(--accent-h); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--t4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--t3); }
+
+.screen-title {
+  font-family: var(--font-d);
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: var(--t1);
+  letter-spacing: -.01em;
+  margin-bottom: 4px;
+}
+.screen-subtitle { font-size: .85rem; color: var(--t3); margin-bottom: 28px; font-weight: 300; }
+.section-title {
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--t3);
+  margin-bottom: 12px;
+}
+.metric-value { font-family: var(--font-b); font-size: 2rem; font-weight: 600; color: var(--t1); letter-spacing: -.02em; line-height: 1.1; }
+.metric-label { font-size: .75rem; color: var(--t3); font-weight: 400; margin-top: 2px; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .77rem; letter-spacing: -.02em; }
+
+@keyframes screenIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes countUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes stagger { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

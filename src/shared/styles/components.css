@@ -1,0 +1,105 @@
+/* Composants partagés (Badge/Button/Toggle/Table/EmptyState/Toast) — styles portés depuis
+   docs/Mockup.html, valeurs inchangées. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-l);
+  padding: 20px;
+  transition: box-shadow .25s var(--ease), border-color .25s var(--ease);
+}
+.card:hover { box-shadow: var(--sh-m); border-color: var(--border-s); }
+.card-grid { display: grid; gap: 16px; }
+.card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--r-m);
+  font-family: var(--font-b); font-size: .8rem; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--t1);
+  transition: all .2s var(--ease); user-select: none; line-height: 1.4;
+}
+.btn:hover { background: var(--bg2); border-color: var(--t4); }
+.btn:active { transform: scale(.97); }
+.btn svg { width: 15px; height: 15px; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+.btn-danger { background: var(--danger-l); color: var(--danger); border-color: rgba(184, 59, 52, .2); }
+.btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--bg2); }
+.btn-sm { padding: 5px 10px; font-size: .73rem; }
+.btn-lg { padding: 12px 28px; font-size: .88rem; border-radius: var(--r-l); }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-s); font-size: .68rem; font-weight: 500; white-space: nowrap; }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.badge-ok { background: var(--ok-l); color: var(--ok); }
+.badge-ok .badge-dot { background: var(--ok); }
+.badge-meta { background: var(--meta-l); color: var(--meta); }
+.badge-meta .badge-dot { background: var(--meta); }
+.badge-attrib { background: var(--attrib-l); color: var(--attrib); }
+.badge-attrib .badge-dot { background: var(--attrib); }
+.badge-unknown { background: var(--unknown-l); color: var(--unknown); }
+.badge-unknown .badge-dot { background: var(--unknown); opacity: .5; }
+.badge-danger { background: var(--danger-l); color: var(--danger); }
+.badge-warn { background: var(--warn-l); color: var(--warn); }
+
+.input {
+  font-family: var(--font-b); font-size: .83rem; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--r-m); background: var(--surface); color: var(--t1); outline: none;
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease); width: 100%;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45, 90, 61, .1); }
+.input::placeholder { color: var(--t4); }
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A1A1A6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
+}
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+thead { background: var(--bg2); position: sticky; top: 0; z-index: 2; }
+th {
+  padding: 10px 14px; text-align: left; font-weight: 600; font-size: .7rem; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--t3); border-bottom: 1px solid var(--border); white-space: nowrap;
+  cursor: pointer; user-select: none; transition: color .15s;
+}
+th:hover { color: var(--t1); }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border-s); color: var(--t2); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr { transition: background .15s var(--ease); }
+tbody tr:hover { background: var(--surface-h); }
+
+.toggle {
+  width: 38px; height: 20px; border-radius: 10px; background: var(--t4); cursor: pointer; position: relative;
+  transition: background .3s var(--ease); border: none; outline: none; flex-shrink: 0;
+}
+.toggle.on { background: var(--ok); }
+.toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); transition: transform .3s var(--ease);
+}
+.toggle.on::after { transform: translateX(18px); }
+
+.empty-state { text-align: center; padding: 60px 20px; color: var(--t3); }
+.empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: .4; }
+.empty-state p { font-size: .88rem; max-width: 320px; margin: 0 auto; }
+
+.ks-sub-status { font-size: .7rem; font-weight: 600; padding: 3px 10px; border-radius: var(--r-s); }
+.ks-sub-status.ok { background: var(--ok-l); color: var(--ok); }
+.ks-sub-status.err { background: var(--danger-l); color: var(--danger); }
+.ks-sub-status.wait { background: var(--warn-l); color: var(--warn); animation: pulse-dot 1.2s infinite; }
+.ks-sub-status.off { background: var(--bg2); color: var(--t3); }
+
+.field-label { font-size: .73rem; font-weight: 600; color: var(--t3); display: block; margin-bottom: 4px; }
+
+.insp-field { padding: 12px 14px; background: var(--bg2); border-radius: var(--r-m); }
+.insp-field-label { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); margin-bottom: 4px; }
+.insp-field-val { font-size: .85rem; font-weight: 500; color: var(--t1); }
+
+#toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 100000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast {
+  background: var(--t1); color: #fff; padding: 10px 18px; border-radius: var(--r-m); font-size: .82rem;
+  font-family: var(--font-b); pointer-events: auto; animation: screenIn .3s var(--ease) both; box-shadow: var(--sh-l);
+}

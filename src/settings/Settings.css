@@ -1,0 +1,22 @@
+/* Styles spécifiques à l'écran Paramètres — portés depuis docs/Mockup.html. */
+.settings-tabs { display: flex; gap: 2px; background: var(--bg2); border-radius: var(--r-m); padding: 3px; margin-bottom: 24px; overflow-x: auto; }
+.settings-tab {
+  padding: 7px 14px; border-radius: var(--r-s); font-size: .78rem; font-weight: 500; color: var(--t3); cursor: pointer;
+  transition: all .2s var(--ease); white-space: nowrap; border: none; background: transparent; font-family: var(--font-b);
+}
+.settings-tab:hover { color: var(--t1); }
+.settings-tab.active { background: var(--surface); color: var(--t1); box-shadow: var(--sh-s); }
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border-s); }
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: .83rem; color: var(--t1); }
+.setting-desc { font-size: .73rem; color: var(--t3); margin-top: 2px; }
+.setting-action { flex-shrink: 0; margin-left: 16px; }
+
+.excl-list { list-style: none; }
+.excl-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border-s); border-radius: var(--r-m);
+  margin-bottom: 6px; background: var(--surface); transition: border-color .2s var(--ease);
+}
+.excl-item:hover { border-color: var(--border); }
+.excl-item-name { flex: 1; font-size: .82rem; font-weight: 500; }
+.excl-item-type { font-size: .68rem; color: var(--t3); padding: 2px 8px; background: var(--bg2); border-radius: var(--r-s); }

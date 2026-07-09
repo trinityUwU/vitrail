@@ -1,0 +1,3 @@
+/* Styles spécifiques à l'écran Timeline — portés depuis docs/Mockup.html. */
+.tl-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+.tl-pause { display: flex; align-items: center; gap: 6px; }

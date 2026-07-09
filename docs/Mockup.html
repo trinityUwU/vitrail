@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vitrail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF7;--bg2:#F3F2EE;--bg3:#EBEAE5;--surface:#FFFFFF;--surface-h:#F8F8F6;
+  --t1:#1A1A1A;--t2:#636366;--t3:#A1A1A6;--t4:#D1D1D3;
+  --accent:#2D5A3D;--accent-h:#244D32;--accent-l:#E8F0EA;--accent-s:#F2F7F4;
+  --border:#E5E5E0;--border-s:#F0F0EC;
+  --danger:#B83B34;--danger-l:#FDF0EF;
+  --warn:#B8860B;--warn-l:#FDF8ED;
+  --ok:#2D5A3D;--ok-l:#E8F0EA;
+  --meta:#C07B2A;--meta-l:#FDF5E8;
+  --attrib:#8E8E93;--attrib-l:#F2F2F2;
+  --unknown:#AEAEB2;--unknown-l:#F5F5F5;
+  --sh-s:0 1px 2px rgba(0,0,0,.04);--sh-m:0 4px 16px rgba(0,0,0,.06);--sh-l:0 12px 40px rgba(0,0,0,.08);
+  --r-s:6px;--r-m:10px;--r-l:14px;--r-xl:20px;
+  --sidebar:248px;--topbar:56px;
+  --font-d:'DM Serif Display',Georgia,serif;--font-b:'Outfit',system-ui,sans-serif;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+html{font-size:15px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:var(--font-b);color:var(--t1);background:var(--bg);line-height:1.6;overflow:hidden;height:100vh}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");
+  opacity:.4}
+::selection{background:var(--accent-l);color:var(--accent-h)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--t4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--t3)}
+
+/* ── Layout ── */
+#app{display:flex;height:100vh;width:100vw}
+#sidebar{width:var(--sidebar);min-width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:relative;z-index:100;transition:transform .35s var(--ease)}
+.sidebar-brand{padding:20px 22px 16px;display:flex;align-items:center;gap:10px}
+.sidebar-brand h1{font-family:var(--font-d);font-size:1.35rem;font-weight:400;letter-spacing:-.01em;color:var(--t1)}
+.sidebar-brand-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .4s var(--ease)}
+.sidebar-brand-dot.active{background:var(--ok);box-shadow:0 0 8px rgba(45,90,61,.4)}
+.sidebar-brand-dot.inactive{background:var(--t4)}
+.sidebar-brand-dot.transitioning{background:var(--warn);animation:pulse-dot 1.2s infinite}
+.sidebar-brand-dot.degraded{background:var(--danger)}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+
+.sidebar-nav{flex:1;overflow-y:auto;padding:4px 10px 20px}
+.nav-group{margin-bottom:16px}
+.nav-group-label{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);padding:8px 12px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:var(--r-m);cursor:pointer;
+  font-size:.85rem;font-weight:400;color:var(--t2);transition:all .2s var(--ease);position:relative;user-select:none}
+.nav-item:hover{background:var(--bg2);color:var(--t1)}
+.nav-item.active{background:var(--accent-s);color:var(--accent);font-weight:500}
+.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:18px;
+  background:var(--accent);border-radius:0 3px 3px 0}
+.nav-item svg{width:18px;height:18px;flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.nav-badge{margin-left:auto;font-size:.65rem;font-weight:600;padding:1px 7px;border-radius:10px;background:var(--danger-l);color:var(--danger)}
+
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{height:var(--topbar);min-height:var(--topbar);border-bottom:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;padding:0 28px;gap:16px;position:relative;z-index:50}
+.ks-quick{display:flex;align-items:center;gap:8px;margin-left:auto}
+.ks-quick-label{font-size:.75rem;color:var(--t3);font-weight:400}
+.ks-toggle{width:40px;height:22px;border-radius:11px;background:var(--t4);cursor:pointer;position:relative;transition:background .3s var(--ease);border:none;outline:none}
+.ks-toggle.on{background:var(--ok)}
+.ks-toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .3s var(--ease)}
+.ks-toggle.on::after{transform:translateX(18px)}
+.ks-quick-state{font-size:.72rem;font-weight:500;padding:2px 8px;border-radius:var(--r-s)}
+.ks-quick-state.on{background:var(--ok-l);color:var(--ok)}
+.ks-quick-state.off{background:var(--bg2);color:var(--t3)}
+.ks-quick-state.warn{background:var(--warn-l);color:var(--warn)}
+.ks-quick-state.err{background:var(--danger-l);color:var(--danger)}
+
+#degradation-banner{padding:8px 28px;background:var(--warn-l);border-bottom:1px solid rgba(184,134,11,.15);
+  font-size:.78rem;color:var(--warn);display:none;align-items:center;gap:8px;animation:slideDown .3s var(--ease)}
+#degradation-banner.show{display:flex}
+#degradation-banner svg{width:15px;height:15px;flex-shrink:0}
+
+#content{flex:1;overflow-y:auto;overflow-x:hidden;padding:28px 32px 60px;position:relative}
+.screen{display:none;animation:screenIn .4s var(--ease) both}
+.screen.active{display:block}
+@keyframes screenIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes stagger{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Typography ── */
+.screen-title{font-family:var(--font-d);font-size:1.75rem;font-weight:400;color:var(--t1);letter-spacing:-.01em;margin-bottom:4px}
+.screen-subtitle{font-size:.85rem;color:var(--t3);margin-bottom:28px;font-weight:300}
+.section-title{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:12px}
+.metric-value{font-family:var(--font-b);font-size:2rem;font-weight:600;color:var(--t1);letter-spacing:-.02em;line-height:1.1}
+.metric-label{font-size:.75rem;color:var(--t3);font-weight:400;margin-top:2px}
+.metric-delta{font-size:.7rem;font-weight:500;margin-top:2px}
+
+/* ── Components ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-l);padding:20px;transition:box-shadow .25s var(--ease),border-color .25s var(--ease)}
+.card:hover{box-shadow:var(--sh-m);border-color:var(--border-s)}
+.card-grid{display:grid;gap:16px}
+.card-grid-2{grid-template-columns:repeat(2,1fr)}
+.card-grid-3{grid-template-columns:repeat(3,1fr)}
+.card-grid-4{grid-template-columns:repeat(4,1fr)}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r-m);font-family:var(--font-b);
+  font-size:.8rem;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--t1);
+  transition:all .2s var(--ease);user-select:none;line-height:1.4}
+.btn:hover{background:var(--bg2);border-color:var(--t4)}
+.btn:active{transform:scale(.97)}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
+.btn-danger{background:var(--danger-l);color:var(--danger);border-color:rgba(184,59,52,.2)}
+.btn-danger:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn-ghost:hover{background:var(--bg2)}
+.btn-sm{padding:5px 10px;font-size:.73rem}
+.btn-lg{padding:12px 28px;font-size:.88rem;border-radius:var(--r-l)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-s);font-size:.68rem;font-weight:500;white-space:nowrap}
+.badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.badge-ok{background:var(--ok-l);color:var(--ok)}.badge-ok .badge-dot{background:var(--ok)}
+.badge-meta{background:var(--meta-l);color:var(--meta)}.badge-meta .badge-dot{background:var(--meta)}
+.badge-attrib{background:var(--attrib-l);color:var(--attrib)}.badge-attrib .badge-dot{background:var(--attrib)}
+.badge-unknown{background:var(--unknown-l);color:var(--unknown)}.badge-unknown .badge-dot{background:var(--unknown);opacity:.5}
+.badge-danger{background:var(--danger-l);color:var(--danger)}
+.badge-warn{background:var(--warn-l);color:var(--warn)}
+
+.input{font-family:var(--font-b);font-size:.83rem;padding:8px 12px;border:1px solid var(--border);border-radius:var(--r-m);
+  background:var(--surface);color:var(--t1);outline:none;transition:border-color .2s var(--ease),box-shadow .2s var(--ease);width:100%}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,90,61,.1)}
+.input::placeholder{color:var(--t4)}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A1A1A6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-l);background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+thead{background:var(--bg2);position:sticky;top:0;z-index:2}
+th{padding:10px 14px;text-align:left;font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);
+  border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+th:hover{color:var(--t1)}
+td{padding:10px 14px;border-bottom:1px solid var(--border-s);color:var(--t2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr{transition:background .15s var(--ease)}
+tbody tr:hover{background:var(--surface-h)}
+.mono{font-family:'SF Mono','Fira Code',monospace;font-size:.77rem;letter-spacing:-.02em}
+
+.toggle{width:38px;height:20px;border-radius:10px;background:var(--t4);cursor:pointer;position:relative;transition:background .3s var(--ease);border:none;outline:none;flex-shrink:0}
+.toggle.on{background:var(--ok)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .3s var(--ease)}
+.toggle.on::after{transform:translateX(18px)}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--t3)}
+.empty-state svg{width:40px;height:40px;margin-bottom:12px;opacity:.4}
+.empty-state p{font-size:.88rem;max-width:320px;margin:0 auto}
+
+/* ── Dashboard ── */
+.dash-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.dash-metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-l);padding:18px 20px;
+  animation:stagger .5s var(--ease) both;transition:box-shadow .25s var(--ease)}
+.dash-metric:hover{box-shadow:var(--sh-m)}
+.dash-metric:nth-child(1){animation-delay:.05s}
+.dash-metric:nth-child(2){animation-delay:.1s}
+.dash-metric:nth-child(3){animation-delay:.15s}
+.dash-metric:nth-child(4){animation-delay:.2s}
+.dash-metric-icon{width:32px;height:32px;border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.dash-metric-icon svg{width:17px;height:17px}
+.dash-metric-val{animation:countUp .6s var(--ease) both}
+
+.dash-top-row{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:16px;animation:stagger .5s var(--ease) .25s both}
+.dash-bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;animation:stagger .5s var(--ease) .35s both}
+.top-list{list-style:none}
+.top-list li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-s);font-size:.82rem}
+.top-list li:last-child{border-bottom:none}
+.top-list-rank{width:20px;font-size:.7rem;font-weight:600;color:var(--t3);text-align:center}
+.top-list-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-list-vol{font-size:.75rem;color:var(--t2);font-weight:500;white-space:nowrap}
+.top-list-bar{width:60px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.top-list-bar-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .8s var(--ease)}
+
+.ks-verify-box{padding:14px 18px;border-radius:var(--r-m);display:flex;align-items:center;gap:10px;font-size:.8rem}
+.ks-verify-ok{background:var(--ok-l);color:var(--ok)}
+.ks-verify-warn{background:var(--warn-l);color:var(--warn)}
+
+/* ── Timeline ── */
+.tl-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
+.tl-pause{display:flex;align-items:center;gap:6px}
+
+/* ── Kill Switch ── */
+.ks-main-toggle{display:flex;align-items:center;justify-content:center;gap:20px;padding:40px;margin-bottom:24px;
+  border-radius:var(--r-xl);border:2px solid var(--border);background:var(--surface);transition:all .3s var(--ease)}
+.ks-main-toggle.active{border-color:var(--ok);background:var(--ok-l)}
+.ks-main-toggle.inactive{border-color:var(--border)}
+.ks-big-toggle{width:56px;height:30px;border-radius:15px;background:var(--t4);cursor:pointer;position:relative;border:none;outline:none;transition:background .3s var(--ease)}
+.ks-big-toggle.on{background:var(--ok)}
+.ks-big-toggle::after{content:'';position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .35s var(--ease)}
+.ks-big-toggle.on::after{transform:translateX(26px)}
+.ks-toggle-label{font-family:var(--font-d);font-size:1.3rem;color:var(--t1)}
+.ks-toggle-sub{font-size:.78rem;color:var(--t3)}
+
+.ks-subsystem{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r-m);border:1px solid var(--border-s);
+  background:var(--surface);transition:all .25s var(--ease);margin-bottom:8px}
+.ks-subsystem:hover{border-color:var(--border)}
+.ks-sub-icon{width:36px;height:36px;border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;background:var(--bg2)}
+.ks-sub-icon svg{width:17px;height:17px;color:var(--t2)}
+.ks-sub-info{flex:1}
+.ks-sub-name{font-size:.83rem;font-weight:500;color:var(--t1)}
+.ks-sub-detail{font-size:.72rem;color:var(--t3)}
+.ks-sub-status{font-size:.7rem;font-weight:600;padding:3px 10px;border-radius:var(--r-s)}
+.ks-sub-status.ok{background:var(--ok-l);color:var(--ok)}
+.ks-sub-status.err{background:var(--danger-l);color:var(--danger)}
+.ks-sub-status.wait{background:var(--warn-l);color:var(--warn);animation:pulse-dot 1.2s infinite}
+.ks-sub-status.off{background:var(--bg2);color:var(--t3)}
+
+.ks-emergency{border:2px solid rgba(184,59,52,.25);border-radius:var(--r-l);padding:24px;text-align:center;background:var(--danger-l);margin-top:24px}
+.ks-emergency-title{font-size:.82rem;font-weight:600;color:var(--danger);margin-bottom:6px}
+.ks-emergency-desc{font-size:.75rem;color:var(--danger);opacity:.7;margin-bottom:14px}
+.ks-emergency .btn-danger{font-weight:600}
+
+.ks-log{max-height:200px;overflow-y:auto;font-size:.75rem;padding:12px;background:var(--bg2);border-radius:var(--r-m);margin-top:16px}
+.ks-log-entry{padding:3px 0;border-bottom:1px solid var(--border-s);display:flex;gap:8px}
+.ks-log-time{color:var(--t3);white-space:nowrap;font-family:'SF Mono',monospace;font-size:.7rem}
+.ks-log-msg{color:var(--t2)}
+
+/* ── Settings ── */
+.settings-tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r-m);padding:3px;margin-bottom:24px;overflow-x:auto}
+.settings-tab{padding:7px 14px;border-radius:var(--r-s);font-size:.78rem;font-weight:500;color:var(--t3);cursor:pointer;
+  transition:all .2s var(--ease);white-space:nowrap;border:none;background:transparent;font-family:var(--font-b)}
+.settings-tab:hover{color:var(--t1)}
+.settings-tab.active{background:var(--surface);color:var(--t1);box-shadow:var(--sh-s)}
+.settings-section{display:none;animation:fadeIn .3s var(--ease)}
+.settings-section.active{display:block}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border-s)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:.83rem;color:var(--t1)}
+.setting-desc{font-size:.73rem;color:var(--t3);margin-top:2px}
+.setting-action{flex-shrink:0;margin-left:16px}
+
+.excl-list{list-style:none}
+.excl-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-s);border-radius:var(--r-m);margin-bottom:6px;
+  background:var(--surface);transition:border-color .2s var(--ease)}
+.excl-item:hover{border-color:var(--border)}
+.excl-item-name{flex:1;font-size:.82rem;font-weight:500}
+.excl-item-type{font-size:.68rem;color:var(--t3);padding:2px 8px;background:var(--bg2);border-radius:var(--r-s)}
+
+/* ── Onboarding ── */
+.onboard-progress{display:flex;align-items:center;gap:0;margin-bottom:36px}
+.onboard-step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;
+  border:2px solid var(--border);color:var(--t3);background:var(--surface);transition:all .3s var(--ease);flex-shrink:0}
+.onboard-step-dot.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.onboard-step-dot.current{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--accent-l)}
+.onboard-step-dot.failed{border-color:var(--danger);color:var(--danger)}
+.onboard-step-line{flex:1;height:2px;background:var(--border);transition:background .3s var(--ease)}
+.onboard-step-line.done{background:var(--ok)}
+.onboard-card{max-width:560px;margin:0 auto;text-align:center;padding:40px}
+.onboard-card h2{font-family:var(--font-d);font-size:1.5rem;margin-bottom:8px}
+.onboard-card p{color:var(--t3);font-size:.88rem;margin-bottom:24px;line-height:1.7}
+.onboard-check{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:var(--r-m);border:1px solid var(--border);
+  background:var(--surface);margin-bottom:10px;text-align:left;font-size:.83rem}
+.onboard-check.ok{border-color:rgba(45,90,61,.2);background:var(--ok-l)}
+.onboard-check.fail{border-color:rgba(184,59,52,.2);background:var(--danger-l)}
+.onboard-check.wait{border-color:rgba(184,134,11,.2);background:var(--warn-l)}
+
+/* ── Inspector ── */
+.insp-header{display:grid;grid-template-columns:1fr auto;gap:16px;margin-bottom:20px}
+.insp-tuple{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.insp-field{padding:12px 14px;background:var(--bg2);border-radius:var(--r-m)}
+.insp-field-label{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:4px}
+.insp-field-val{font-size:.85rem;font-weight:500;color:var(--t1)}
+.http-block{font-family:'SF Mono','Fira Code',monospace;font-size:.76rem;background:var(--bg2);border-radius:var(--r-m);padding:16px;
+  overflow-x:auto;line-height:1.7;white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto}
+.http-method{color:var(--accent);font-weight:700}
+.http-path{color:var(--t1)}
+.http-header-name{color:var(--meta)}
+.http-status{font-weight:700}
+.http-status-2{color:var(--ok)}
+.http-status-3{color:var(--meta)}
+.http-status-4{color:var(--warn)}
+.http-status-5{color:var(--danger)}
+
+/* ── Alerts ── */
+.alert-rule{padding:16px 18px;border:1px solid var(--border-s);border-radius:var(--r-l);margin-bottom:10px;background:var(--surface);transition:all .25s var(--ease)}
+.alert-rule:hover{border-color:var(--border);box-shadow:var(--sh-s)}
+.alert-rule-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.alert-rule-name{font-size:.85rem;font-weight:500;flex:1}
+.alert-trigger{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:var(--r-m);margin-top:8px;font-size:.8rem}
+.alert-trigger-time{font-size:.7rem;color:var(--t3);white-space:nowrap;margin-top:2px}
+
+/* ── Responsive ── */
+@media(max-width:1100px){.dash-metrics{grid-template-columns:repeat(2,1fr)}.dash-top-row,.dash-bottom-row{grid-template-columns:1fr}}
+@media(max-width:768px){#sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);z-index:200}
+  #sidebar.open{transform:translateX(0)}#content{padding:20px 16px 40px}.dash-metrics{grid-template-columns:1fr 1fr}
+  .insp-tuple{grid-template-columns:repeat(3,1fr)}}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar"></aside>
+  <div id="main">
+    <header id="topbar"></header>
+    <div id="degradation-banner"></div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   État global & données simulées
+   ═══════════════════════════════════════════ */
+const S = {
+  screen: 'onboarding',
+  ksState: 'inactive', // inactive | active | transitioning | degraded
+  onboardingDone: false,
+  onboardStep: 0,
+  timelinePaused: false,
+  settingsTab: 'ca',
+  inspectedFlow: null,
+  inspectedProcess: null,
+  inspectedDest: null,
+  activeSince: null,
+  metaCount: 0,
+  totalIn: 0,
+  totalOut: 0,
+  activeConns: 0
+};
+
+const VIS = {
+  fully: { label: 'Déchiffré', cls: 'badge-ok', key: 'fully' },
+  meta: { label: 'Métadonnées', cls: 'badge-meta', key: 'meta' },
+  attrib: { label: 'Attribué', cls: 'badge-attrib', key: 'attrib' },
+  unknown: { label: 'Inconnu', cls: 'badge-unknown', key: 'unknown' }
+};
+
+/* Processus simulés */
+const processes = [
+  { name:'Google Chrome', path:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', pids:[4821,4855], vol:148.3, dests:42, vis:'fully', keylog:true, icon:'globe' },
+  { name:'Firefox', path:'/Applications/Firefox.app/Contents/MacOS/firefox', pids:[5102], vol:89.7, dests:31, vis:'fully', keylog:true, icon:'globe' },
+  { name:'Slack', path:'/Applications/Slack.app/Contents/MacOS/Slack', pids:[6234], vol:34.2, dests:8, vis:'meta', keylog:false, icon:'message-square' },
+  { name:'Discord', path:'/Applications/Discord.app/Contents/MacOS/Discord', pids:[6510], vol:67.8, dests:12, vis:'meta', keylog:false, icon:'message-circle' },
+  { name:'VS Code', path:'/Applications/Visual Studio Code.app/Contents/MacOS/Electron', pids:[7201], vol:22.1, dests:15, vis:'fully', keylog:true, icon:'code' },
+  { name:'Spotify', path:'/Applications/Spotify.app/Contents/MacOS/Spotify', pids:[8100], vol:156.4, dests:6, vis:'fully', keylog:false, icon:'music' },
+  { name:'Docker Desktop', path:'/Applications/Docker.app/Contents/MacOS/Docker Desktop', pids:[3300], vol:445.2, dests:28, vis:'attrib', keylog:false, icon:'container' },
+  { name:'Node.js', path:'/usr/local/bin/node', pids:[9100,9120,9155], vol:18.6, dests:9, vis:'fully', keylog:false, icon:'terminal' },
+  { name:'curl', path:'/usr/bin/curl', pids:[10230], vol:0.4, dests:1, vis:'attrib', keylog:false, icon:'terminal' },
+  { name:'python3', path:'/usr/local/bin/python3', pids:[10400], vol:12.8, dests:5, vis:'fully', keylog:false, icon:'terminal' }
+];
+
+/* Destinations simulées */
+const destinations = [
+  { domain:'api.google.com', ip:'142.250.74.238', vol:87.3, procs:2, vis:'fully', first:'14:02:11', last:'14:58:44', tls:true, pinning:false },
+  { domain:'cdn.jsdelivr.net', ip:'151.101.1.229', vol:45.2, procs:3, vis:'fully', first:'14:05:33', last:'14:57:01', tls:true, pinning:false },
+  { domain:'github.com', ip:'140.82.121.4', vol:33.8, procs:2, vis:'fully', first:'14:08:22', last:'14:55:19', tls:true, pinning:false },
+  { domain:'slack.com', ip:'34.237.168.12', vol:28.1, procs:1, vis:'meta', first:'14:10:05', last:'14:58:30', tls:true, pinning:true },
+  { domain:'discord.gg', ip:'162.159.135.232', vol:52.4, procs:1, vis:'meta', first:'14:11:40', last:'14:58:50', tls:true, pinning:true },
+  { domain:'spotify.com', ip:'35.186.224.45', vol:112.6, procs:1, vis:'fully', first:'14:03:18', last:'14:58:55', tls:true, pinning:false },
+  { domain:'registry-1.docker.io', ip:'52.5.133.89', vol:312.7, procs:1, vis:'attrib', first:'14:01:02', last:'14:56:33', tls:false, pinning:false },
+  { domain:'crates.io', ip:'18.214.128.42', vol:8.4, procs:2, vis:'fully', first:'14:20:11', last:'14:45:22', tls:true, pinning:false },
+  { domain:'fonts.googleapis.com', ip:'142.250.74.238', vol:2.1, procs:2, vis:'fully', first:'14:05:40', last:'14:30:15', tls:true, pinning:false },
+  { domain:'play.googleapis.com', ip:'142.250.74.174', vol:95.8, procs:1, vis:'fully', first:'14:04:10', last:'14:58:40', tls:true, pinning:false }
+];
+
+/* Flux simulés pour la Timeline */
+const flowTemplates = [
+  { proc:'Google Chrome', dest:'api.google.com', ip:'142.250.74.238', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/search?q=vitrail', status:200, size:45230 },
+  { proc:'Google Chrome', dest:'cdn.jsdelivr.net', ip:'151.101.1.229', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/npm/lucide@latest', status:200, size:18200 },
+  { proc:'Slack', dest:'slack.com', ip:'34.237.168.12', port:443, proto:'TLS 1.3', vis:'meta', method:null, path:null, status:null, size:8920 },
+  { proc:'Discord', dest:'discord.gg', ip:'162.159.135.232', port:443, proto:'TLS 1.3', vis:'meta', method:null, path:null, status:null, size:23100 },
+  { proc:'VS Code', dest:'github.com', ip:'140.82.121.4', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/api/v3/repos/user/project', status:200, size:8900 },
+  { proc:'Docker Desktop', dest:'registry-1.docker.io', ip:'52.5.133.89', port:443, proto:'TLS 1.2', vis:'attrib', method:null, path:null, status:null, size:523000 },
+  { proc:'Spotify', dest:'spotify.com', ip:'35.186.224.45', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/audio/track/8f2k3j...', status:206, size:245000 },
+  { proc:'Firefox', dest:'play.googleapis.com', ip:'142.250.74.174', port:443, proto:'TLS 1.3', vis:'fully', method:'POST', path:'/fdls/subscriptions', status:200, size:3200 },
+  { proc:'Node.js', dest:'crates.io', ip:'18.214.128.42', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/api/v1/crates/serde', status:200, size:5600 },
+  { proc:'Google Chrome', dest:'fonts.googleapis.com', ip:'142.250.74.238', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/css2?family=Outfit', status:200, size:4200 },
+  { proc:'python3', dest:'api.google.com', ip:'142.250.74.238', port:443, proto:'TLS 1.3', vis:'fully', method:'POST', path:'/ml/v1/models:predict', status:200, size:12000 },
+  { proc:'curl', dest:'registry-1.docker.io', ip:'52.5.133.89', port:443, proto:'TLS 1.2', vis:'attrib', method:null, path:null, status:null, size:890 },
+  { proc:'Discord', dest:'discord.gg', ip:'162.159.135.232', port:443, proto:'TLS 1.3', vis:'meta', method:null, path:null, status:null, size:15400 },
+  { proc:'Slack', dest:'slack.com', ip:'34.237.168.12', port:443, proto:'TLS 1.3', vis:'meta', method:null, path:null, status:null, size:6700 },
+  { proc:'VS Code', dest:'cdn.jsdelivr.net', ip:'151.101.1.229', port:443, proto:'TLS 1.3', vis:'fully', method:'GET', path:'/npm/typescript@5.4', status:200, size:340000 }
+];
+
+/* Générer des flux avec timestamps répartis sur ~1h */
+let flows = [];
+const baseTime = Date.now() - 3600000;
+flowTemplates.forEach((t, i) => {
+  const count = 1 + Math.floor(Math.random() * 4);
+  for (let j = 0; j < count; j++) {
+    const offset = Math.floor(Math.random() * 3600000);
+    flows.push({
+      id: `f${i}-${j}`,
+      ts: new Date(baseTime + offset),
+      dur: 50 + Math.floor(Math.random() * 3000),
+      ...t,
+      size: Math.floor(t.size * (0.5 + Math.random()))
+    });
+  }
+});
+flows.sort((a, b) => b.ts - a.ts);
+
+/* Alertes simulées */
+const alertRules = [
+  { id:'r1', name:'Nouveau processus détecté', desc:'Déclenché quand un processus jamais vu initie une connexion', criteria:'processus = nouveau', active:true, triggers:[
+    { time:'14:42:18', flow:'python3 → api.google.com', vis:'fully' },
+    { time:'14:15:03', flow:'curl → registry-1.docker.io', vis:'attrib' }
+  ]},
+  { id:'r2', name:'Destination surveillée contactée', desc:'Notifie si une destination taguée "à surveiller" est contactée', criteria:'destination.tag = surveillé', active:true, triggers:[
+    { time:'14:38:55', flow:'Discord → discord.gg', vis:'meta' }
+  ]},
+  { id:'r3', name:'Changement de visibilité inattendu', desc:'Un processus en Métadonnées passe soudain en Déchiffré — signal de dégradation potentielle', criteria:'visibilité: meta → fully', active:false, triggers:[] }
+];
+
+/* Sessions passées */
+const sessions = [
+  { id:'s1', start:new Date(Date.now()-86400000*2), end:new Date(Date.now()-86400000*2+7200000), vol:1.2, procs:8, alerts:3 },
+  { id:'s2', start:new Date(Date.now()-86400000), end:new Date(Date.now()-86400000+5400000), vol:0.8, procs:6, alerts:1 },
+  { id:'s3', start:new Date(Date.now()-43200000), end:new Date(Date.now()-43200000+10800000), vol:2.1, procs:11, alerts:5 }
+];
+
+/* Sous-systèmes du Kill Switch */
+const subsystems = [
+  { id:'opensnitch', name:'Attribution (OpenSnitch)', icon:'eye', desc:'Daemon de corrélation processus/flux' },
+  { id:'capture', name:'Capture nftables', icon:'download', desc:'Règles de redirection du trafic' },
+  { id:'polarproxy', name:'Décryptage (PolarProxy)', icon:'key-round', desc:'Intercepteur TLS/MITM local' },
+  { id:'keylog', name:'Keylog SSLKEYLOGFILE', icon:'file-key', desc:'Export de clés par les applications' },
+  { id:'nftables', name:'Règles nftables', icon:'shield', desc:'Chaîne de filtrage active' },
+  { id:'ca', name:'CA installée', icon:'certificate', desc:'Certificat racine dans le trust store' }
+];
+
+/* Exclusions */
+let exclusions = [
+  { name:'Docker Desktop', type:'processus' },
+  { name:'registry-1.docker.io', type:'domaine' },
+  { name:'curl', type:'processus' }
+];
+
+/* ═══════════════════════════════════════════
+   Utilitaires
+   ═══════════════════════════════════════════ */
+function fmtSize(b) {
+  if (b < 1024) return b + ' o';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' Ko';
+  return (b/1048576).toFixed(1) + ' Mo';
+}
+function fmtVol(mb) { return mb >= 1000 ? (mb/1000).toFixed(2)+' Go' : mb.toFixed(1)+' Mo'; }
+function fmtTime(d) { return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function fmtDur(ms) {
+  if (ms < 1000) return ms+'ms';
+  return (ms/1000).toFixed(1)+'s';
+}
+function fmtSince(d) {
+  const s = Math.floor((Date.now()-d)/1000);
+  if (s < 60) return s+'s';
+  const m = Math.floor(s/60);
+  if (m < 60) return m+'min '+Math.floor(s%60)+'s';
+  const h = Math.floor(m/60);
+  return h+'h '+Math.floor(m%60)+'min';
+}
+function fmtDate(d) { return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})+' '+fmtTime(d); }
+
+function visBadge(vis) {
+  const v = VIS[vis] || VIS.unknown;
+  return `<span class="badge ${v.cls}"><span class="badge-dot"></span>${v.label}</span>`;
+}
+
+function animNum(el, target, suffix='', dur=800) {
+  const start = performance.now();
+  const from = 0;
+  function tick(now) {
+    const p = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = (from + (target - from) * ease).toFixed(suffix.includes('o')?0:1) + suffix;
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ═══════════════════════════════════════════
+   Rendu — Sidebar
+   ═══════════════════════════════════════════ */
+function renderSidebar() {
+  const dotCls = S.ksState;
+  const items = [
+    { group:'Surveillance', items:[
+      { id:'dashboard', icon:'layout-dashboard', label:'Vue d\'ensemble' },
+      { id:'timeline', icon:'activity', label:'Timeline' },
+      { id:'processes', icon:'app-window', label:'Processus' },
+      { id:'destinations', icon:'globe', label:'Destinations' }
+    ]},
+    { group:'Analyse', items:[
+      { id:'search', icon:'search', label:'Recherche avancée' },
+      { id:'history', icon:'clock', label:'Historique' }
+    ]},
+    { group:'Sécurité', items:[
+      { id:'killswitch', icon:'shield-check', label:'Kill Switch' },
+      { id:'alerts', icon:'bell', label:'Alertes', badge: alertRules.filter(r=>r.active).reduce((a,r)=>a+r.triggers.length,0) || null }
+    ]},
+    { group:'Système', items:[
+      { id:'settings', icon:'settings', label:'Paramètres' },
+      { id:'logs', icon:'file-text', label:'Journal système' },
+      { id:'privacy', icon:'lock', label:'Confidentialité' }
+    ]}
+  ];
+  let h = `<div class="sidebar-brand"><span class="sidebar-brand-dot ${dotCls}"></span><h1>Vitrail</h1></div><nav class="sidebar-nav">`;
+  items.forEach(g => {
+    h += `<div class="nav-group"><div class="nav-group-label">${g.group}</div>`;
+    g.items.forEach(it => {
+      const active = S.screen === it.id ? ' active' : '';
+      const badge = it.badge ? `<span class="nav-badge">${it.badge}</span>` : '';
+      h += `<div class="nav-item${active}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${it.label}</span>${badge}</div>`;
+    });
+    h += '</div>';
+  });
+  h += '</nav>';
+  document.getElementById('sidebar').innerHTML = h;
+}
+
+/* ═══════════════════════════════════════════
+   Rendu — Topbar
+   ═══════════════════════════════════════════ */
+function renderTopbar() {
+  const isOn = S.ksState === 'active';
+  const isTrans = S.ksState === 'transitioning';
+  const isDeg = S.ksState === 'degraded';
+  let stateCls = 'off', stateTxt = 'Inactif';
+  if (isOn) { stateCls = 'on'; stateTxt = 'Actif'; }
+  else if (isTrans) { stateCls = 'warn'; stateTxt = 'Transition...'; }
+  else if (isDeg) { stateCls = 'err'; stateTxt = 'Dégradé'; }
+
+  document.getElementById('topbar').innerHTML = `
+    <span style="font-size:.8rem;color:var(--t3);font-weight:400">${S.screen==='onboarding'?'Configuration initiale':
+      {dashboard:'Vue d\'ensemble',timeline:'Timeline temps réel',processes:'Processus',destinations:'Destinations',
+       search:'Recherche avancée',history:'Historique',killswitch:'Kill Switch',alerts:'Alertes & Règles',
+       settings:'Paramètres',logs:'Journal système',privacy:'Confidentialité'}[S.screen]||''}</span>
+    <div class="ks-quick">
+      <span class="ks-quick-label">Kill Switch</span>
+      <button class="ks-toggle${isOn?' on':''}" id="ks-quick-toggle" aria-label="Toggle kill switch"></button>
+      <span class="ks-quick-state ${stateCls}">${stateTxt}</span>
+    </div>`;
+
+  /* Bannière de dégradation */
+  const banner = document.getElementById('degradation-banner');
+  if (isDeg) {
+    banner.className = 'show';
+    banner.innerHTML = `<i data-lucide="alert-triangle"></i><span>PolarProxy ne répond pas — le trafic est attribué mais non déchiffré. Vérifiez le panneau Kill Switch.</span>`;
+  } else if (isTrans) {
+    banner.className = 'show';
+    banner.innerHTML = `<i data-lucide="loader"></i><span>Activation en cours — séquence d'initialisation des sous-systèmes...</span>`;
+  } else {
+    banner.className = '';
+    banner.innerHTML = '';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   Rendu — Écrans
+   ═══════════════════════════════════════════ */
+function renderScreen() {
+  const c = document.getElementById('content');
+  const renderers = {
+    onboarding: renderOnboarding, dashboard: renderDashboard, timeline: renderTimeline,
+    processes: renderProcesses, destinations: renderDestinations, inspector: renderInspector,
+    search: renderSearch, alerts: renderAlerts, killswitch: renderKillSwitch,
+    settings: renderSettings, privacy: renderPrivacy, logs: renderLogs, history: renderHistory
+  };
+  c.innerHTML = `<div class="screen active">${(renderers[S.screen] || renderDashboard)()}</div>`;
+  lucide.createIcons();
+  afterRender();
+}
+
+/* ── 13. Onboarding ── */
+function renderOnboarding() {
+  const steps = ['OpenSnitch','CA locale','Permissions','Test à blanc','Résumé'];
+  const checks = [
+    { label:'Daemon OpenSnitch détecté et actif', ok:true },
+    { label:'Version OpenSnitch 1.6.x compatible', ok:true }
+  ];
+  const checks2 = [
+    { label:'CA RSA 4096 bits générée', ok:true },
+    { label:'Empreinte SHA-256 : 4A:2B:...:F1', ok:true }
+  ];
+  const checks3 = [
+    { label:'Accès nftables (root) accordé', ok:true },
+    { label:'Installation trust store système possible', ok:true }
+  ];
+  const checks4 = [
+    { label:'Activation courte (5s) réussie', ok:true },
+    { label:'Trafic capturé et attribué', ok:true },
+    { label:'Désactivation propre — aucune règle résiduelle', ok:true },
+    { label:'Vérification post-désactivation : conforme', ok:true }
+  ];
+  const allChecks = [checks, checks2, checks3, checks4, []];
+  const step = S.onboardStep;
+
+  let dots = steps.map((s,i) => {
+    let cls = i < step ? 'done' : i === step ? 'current' : '';
+    return `<div class="onboard-step-dot ${cls}">${i < step ? '&#10003;' : i+1}</div>${i < steps.length-1 ? `<div class="onboard-step-line${i < step ? ' done' : ''}"></div>` : ''}`;
+  }).join('');
+
+  const titles = [
+    'Vérification d\'OpenSnitch','Certificat d\'autorité locale','Permissions système','Test à blanc','Prêt à démarrer'
+  ];
+  const descs = [
+    'Vitrail s\'appuie sur OpenSnitch pour attribuer chaque flux réseau à son processus source. Nous vérifions que le daemon est bien en cours d\'exécution.',
+    'Pour déchiffrer le trafic TLS, Vitrail génère une autorité de certification locale. Cette CA sera installée dans votre trust store système. Rien n\'est jamais partagé en dehors de cette machine.',
+    'L\'interception du trafic nécessite des règles nftables et l\'accès au trust store. Ces élévations de privilèges sont ponctuelles et réversibles.',
+    'Nous effectuons une activation courte pour vérifier que toute la chaîne fonctionne correctement, puis une désactivation pour confirmer la réversibilité complète.',
+    'Tous les prérequis sont satisfaits. Vitrail est prêt à surveiller votre trafic réseau. Vous pourrez l\'activer à tout moment depuis le tableau de bord.'
+  ];
+  const curChecks = allChecks[step] || [];
+
+  let checksHtml = curChecks.map(c => `<div class="onboard-check ${c.ok?'ok':'fail'}"><i data-lucide="${c.ok?'check-circle':'x-circle'}" style="width:18px;height:18px;flex-shrink:0;color:${c.ok?'var(--ok)':'var(--danger)'}"></i><span>${c.label}</span></div>`).join('');
+
+  let action = '';
+  if (step < 4) {
+    action = `<button class="btn btn-primary btn-lg" data-onboard-next>Continuer</button>`;
+  } else {
+    action = `<button class="btn btn-primary btn-lg" data-onboard-done>Accéder au tableau de bord</button>`;
+  }
+  if (step > 0 && step < 4) {
+    action = `<button class="btn btn-ghost btn-lg" data-onboard-prev style="margin-right:12px">Retour</button>` + action;
+  }
+
+  return `<div class="onboard-progress">${dots}</div>
+    <div class="onboard-card">
+      <h2>${titles[step]}</h2>
+      <p>${descs[step]}</p>
+      ${checksHtml}
+      <div style="margin-top:28px">${action}</div>
+    </div>`;
+}
+
+/* ── 1. Dashboard ── */
+function renderDashboard() {
+  if (S.ksState === 'inactive') {
+    return `<div class="screen-title">Vue d'ensemble</div>
+      <div class="screen-subtitle">Tableau de bord de l'activité réseau</div>
+      <div class="empty-state" style="padding:80px 20px">
+        <i data-lucide="power" style="width:48px;height:48px;margin-bottom:16px;opacity:.25"></i>
+        <p style="font-size:1rem;color:var(--t2);margin-bottom:16px;font-weight:400">Vitrail est en attente d'activation</p>
+        <button class="btn btn-primary btn-lg" data-ks-activate>Activer Vitrail</button>
+      </div>`;
+  }
+
+  const metaFlows = flows.filter(f => f.vis === 'meta').length;
+  const topProcs = [...processes].sort((a,b) => b.vol - a.vol).slice(0,6);
+  const topDests = [...destinations].sort((a,b) => b.vol - a.vol).slice(0,6);
+  const maxPV = topProcs[0]?.vol || 1;
+  const maxDV = topDests[0]?.vol || 1;
+
+  return `<div class="screen-title">Vue d'ensemble</div>
+    <div class="screen-subtitle">Activité depuis ${S.activeSince ? fmtSince(S.activeSince) : '—'}</div>
+
+    <div class="dash-metrics">
+      <div class="dash-metric">
+        <div class="dash-metric-icon" style="background:var(--accent-l);color:var(--accent)"><i data-lucide="radio" style="width:17px;height:17px"></i></div>
+        <div class="metric-value dash-metric-val" data-count="${S.activeConns}">0</div>
+        <div class="metric-label">Connexions actives</div>
+      </div>
+      <div class="dash-metric">
+        <div class="dash-metric-icon" style="background:#EDF4FF;color:#3B6FD4"><i data-lucide="arrow-down" style="width:17px;height:17px"></i></div>
+        <div class="metric-value dash-metric-val" data-count="${S.totalIn}" data-suffix=" Mo">0</div>
+        <div class="metric-label">Débit entrant cumulé</div>
+      </div>
+      <div class="dash-metric">
+        <div class="dash-metric-icon" style="background:#FFF4ED;color:#D4823B"><i data-lucide="arrow-up" style="width:17px;height:17px"></i></div>
+        <div class="metric-value dash-metric-val" data-count="${S.totalOut}" data-suffix=" Mo">0</div>
+        <div class="metric-label">Débit sortant cumulé</div>
+      </div>
+      <div class="dash-metric">
+        <div class="dash-metric-icon" style="background:var(--meta-l);color:var(--meta)"><i data-lucide="eye-off" style="width:17px;height:17px"></i></div>
+        <div class="metric-value dash-metric-val" data-count="${metaFlows}">0</div>
+        <div class="metric-label">Flux en métadonnées seules</div>
+      </div>
+    </div>
+
+    <div class="dash-top-row">
+      <div class="card">
+        <div class="section-title">Top processus par volume</div>
+        <ul class="top-list">
+          ${topProcs.map((p,i) => `<li>
+            <span class="top-list-rank">${i+1}</span>
+            <span class="top-list-name">${p.name}</span>
+            ${visBadge(p.vis)}
+            <span class="top-list-vol">${fmtVol(p.vol)}</span>
+            <div class="top-list-bar"><div class="top-list-bar-fill" style="width:${(p.vol/maxPV*100).toFixed(0)}%"></div></div>
+          </li>`).join('')}
+        </ul>
+        <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" data-nav="processes">Voir tout <i data-lucide="arrow-right" style="width:13px;height:13px"></i></button></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Top destinations par volume</div>
+        <ul class="top-list">
+          ${topDests.map((d,i) => `<li>
+            <span class="top-list-rank">${i+1}</span>
+            <span class="top-list-name mono">${d.domain}</span>
+            ${visBadge(d.vis)}
+            <span class="top-list-vol">${fmtVol(d.vol)}</span>
+            <div class="top-list-bar"><div class="top-list-bar-fill" style="width:${(d.vol/maxDV*100).toFixed(0)}%"></div></div>
+          </li>`).join('')}
+        </ul>
+        <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" data-nav="destinations">Voir tout <i data-lucide="arrow-right" style="width:13px;height:13px"></i></button></div>
+      </div>
+    </div>
+
+    <div class="dash-bottom-row">
+      <div class="card">
+        <div class="section-title">Dernière vérification Kill Switch</div>
+        <div class="ks-verify-box ks-verify-ok">
+          <i data-lucide="check-circle" style="width:20px;height:20px"></i>
+          <div><strong>Conforme</strong> — vérifiée à ${fmtTime(new Date(Date.now()-120000))}<br><span style="font-size:.72rem;color:var(--t3)">Aucune divergence détectée entre l'état attendu et l'état réel des sous-systèmes</span></div>
+        </div>
+        <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" data-nav="killswitch">Ouvrir le panneau Kill Switch <i data-lucide="arrow-right" style="width:13px;height:13px"></i></button></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Accès rapide</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-ghost" style="justify-content:flex-start" data-nav="timeline"><i data-lucide="activity" style="width:16px;height:16px"></i> Timeline temps réel</button>
+          <button class="btn btn-ghost" style="justify-content:flex-start" data-nav="search"><i data-lucide="search" style="width:16px;height:16px"></i> Recherche avancée</button>
+          <button class="btn btn-ghost" style="justify-content:flex-start" data-nav="alerts"><i data-lucide="bell" style="width:16px;height:16px"></i> Alertes & Règles</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ── 2. Timeline ── */
+function renderTimeline() {
+  if (S.ksState === 'inactive') {
+    return `<div class="screen-title">Timeline</div><div class="screen-subtitle">Flux réseau en temps réel</div>
+      <div class="empty-state"><i data-lucide="power"></i><p>Activez Vitrail pour voir du trafic</p></div>`;
+  }
+  const visOptions = Object.values(VIS).map(v => `<option value="${v.key}">${v.label}</option>`).join('');
+  return `<div class="screen-title">Timeline</div><div class="screen-subtitle">Flux réseau en temps réel</div>
+    <div class="tl-filters">
+      <input class="input" style="width:200px" placeholder="Rechercher..." data-tl-search>
+      <select class="input select" style="width:150px" data-tl-vis><option value="">Tous niveaux</option>${visOptions}</select>
+      <select class="input select" style="width:160px" data-tl-proc><option value="">Tous processus</option>${processes.map(p=>`<option>${p.name}</option>`).join('')}</select>
+      <input class="input" style="width:130px" placeholder="Port..." data-tl-port>
+      <div class="tl-pause"><button class="btn btn-sm" id="tl-pause-btn" data-tl-pause><i data-lucide="pause" style="width:14px;height:14px"></i> ${S.timelinePaused?'Reprendre':'Pause'}</button></div>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-sm" data-tl-export-json><i data-lucide="download" style="width:13px;height:13px"></i> JSON</button>
+        <button class="btn btn-sm" data-tl-export-csv><i data-lucide="download" style="width:13px;height:13px"></i> CSV</button>
+      </div>
+    </div>
+    <div class="table-wrap" style="max-height:calc(100vh - 240px);overflow-y:auto">
+      <table>
+        <thead><tr>
+          <th data-sort="ts">Heure</th><th data-sort="proc">Processus</th><th data-sort="dest">Destination</th>
+          <th>Port</th><th>Protocole</th><th data-sort="size">Taille</th><th>Visibilité</th><th>Durée</th>
+        </tr></thead>
+        <tbody>${flows.map(f => `<tr data-flow-id="${f.id}" style="cursor:pointer">
+          <td class="mono" style="white-space:nowrap">${fmtTime(f.ts)}</td>
+          <td style="font-weight:500;color:var(--t1)">${f.proc}</td>
+          <td class="mono">${f.dest}</td>
+          <td class="mono">${f.port}</td>
+          <td style="font-size:.75rem">${f.proto}</td>
+          <td class="mono">${fmtSize(f.size)}</td>
+          <td>${visBadge(f.vis)}</td>
+          <td class="mono" style="font-size:.75rem">${fmtDur(f.dur)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ── 3. Processus ── */
+function renderProcesses() {
+  const sorted = [...processes].sort((a,b) => b.vol - a.vol);
+  return `<div class="screen-title">Processus</div>
+    <div class="screen-subtitle">Applications ayant généré du trafic réseau</div>
+    <input class="input" style="width:280px;margin-bottom:20px" placeholder="Filtrer par nom de processus..." data-proc-filter>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Processus</th><th>Chemin</th><th>PIDs</th><th>Volume</th><th>Destinations</th><th>Visibilité</th><th>Keylog</th><th></th></tr></thead>
+        <tbody>${sorted.map(p => `<tr>
+          <td style="font-weight:500;color:var(--t1)">${p.name}</td>
+          <td class="mono" style="font-size:.73rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.path}">${p.path}</td>
+          <td class="mono" style="font-size:.75rem">${p.pids.join(', ')}</td>
+          <td style="font-weight:500">${fmtVol(p.vol)}</td>
+          <td>${p.dests}</td>
+          <td>${visBadge(p.vis)}</td>
+          <td>${p.keylog ? '<span class="badge badge-ok">Actif</span>' : '<span class="badge badge-attrib">Non</span>'}</td>
+          <td><button class="btn btn-ghost btn-sm" data-proc-detail="${p.name}">Détail</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div id="proc-detail-panel" style="margin-top:20px"></div>`;
+}
+
+/* ── 4. Destinations ── */
+function renderDestinations() {
+  const sorted = [...destinations].sort((a,b) => b.vol - a.vol);
+  return `<div class="screen-title">Destinations</div>
+    <div class="screen-subtitle">Domaines et adresses IP contactés</div>
+    <input class="input" style="width:280px;margin-bottom:20px" placeholder="Filtrer par domaine ou IP..." data-dest-filter>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Domaine / IP</th><th>Volume</th><th>Processus</th><th>Visibilité</th><th>TLS</th><th>Pinning</th><th>Première</th><th>Dernière</th><th></th></tr></thead>
+        <tbody>${sorted.map(d => `<tr>
+          <td><span class="mono" style="font-weight:500;color:var(--t1)">${d.domain}</span><br><span class="mono" style="font-size:.7rem;color:var(--t3)">${d.ip}</span></td>
+          <td style="font-weight:500">${fmtVol(d.vol)}</td>
+          <td>${d.procs}</td>
+          <td>${visBadge(d.vis)}</td>
+          <td>${d.tls ? '<span class="badge badge-ok">Oui</span>' : '<span class="badge badge-attrib">Non</span>'}</td>
+          <td>${d.pinning ? '<span class="badge badge-meta">Oui</span>' : '<span class="badge badge-ok">Non</span>'}</td>
+          <td class="mono" style="font-size:.75rem">${d.first}</td>
+          <td class="mono" style="font-size:.75rem">${d.last}</td>
+          <td><button class="btn btn-ghost btn-sm" data-dest-detail="${d.domain}">Détail</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div id="dest-detail-panel" style="margin-top:20px"></div>`;
+}
+
+/* ── 5. Inspecteur de flux ── */
+function renderInspector() {
+  const f = S.inspectedFlow || flows[0];
+  if (!f) return '<div class="empty-state"><p>Aucun flux sélectionné</p></div>';
+
+  let contentHtml = '';
+  if (f.vis === 'fully' && f.method) {
+    const statusCls = f.status >= 500 ? 'http-status-5' : f.status >= 400 ? 'http-status-4' : f.status >= 300 ? 'http-status-3' : 'http-status-2';
+    contentHtml = `<div style="margin-bottom:16px">
+      <div class="section-title">Contenu déchiffré — Requête / Réponse HTTP</div>
+      <div class="http-block"><span class="http-method">${f.method}</span> <span class="http-path">${f.path}</span> HTTP/1.1
+Host: ${f.dest}
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+Accept: application/json, text/plain, */*
+Accept-Language: fr-FR,fr;q=0.9
+Connection: keep-alive
+
+HTTP/1.1 <span class="http-status ${statusCls}">${f.status} ${f.status===200?'OK':f.status===206?'Partial Content':'Moved'}</span>
+Content-Type: application/json; charset=utf-8
+Content-Length: ${f.size}
+Cache-Control: private, max-age=300
+X-Request-Id: ${f.id}-req
+
+{"timestamp":"${f.ts.toISOString()}","data":[...]}</div>
+    </div>`;
+  } else if (f.vis === 'meta') {
+    contentHtml = `<div class="card" style="border-color:rgba(192,123,42,.25);background:var(--meta-l)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <i data-lucide="eye-off" style="width:18px;height:18px;color:var(--meta)"></i>
+        <strong style="color:var(--meta)">Pinning détecté — contenu non visible</strong>
+      </div>
+      <p style="font-size:.82rem;color:var(--t2);line-height:1.6">Le serveur distant utilise un certificat épinglé (certificate pinning). Le MITM local ne peut pas déchiffrer ce flux. Seules les métadonnées (SNI, taille, durée) sont disponibles.</p>
+      <div style="margin-top:12px;display:flex;gap:16px;font-size:.8rem">
+        <span><strong>SNI :</strong> <span class="mono">${f.dest}</span></span>
+        <span><strong>Taille :</strong> <span class="mono">${fmtSize(f.size)}</span></span>
+        <span><strong>Durée :</strong> <span class="mono">${fmtDur(f.dur)}</span></span>
+      </div>
+    </div>`;
+  } else {
+    contentHtml = `<div class="card" style="background:var(--bg2)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <i data-lucide="info" style="width:18px;height:18px;color:var(--t3)"></i>
+        <strong style="color:var(--t2)">Flux attribué sans TLS</strong>
+      </div>
+      <p style="font-size:.82rem;color:var(--t3)">Ce flux n'utilise pas TLS. Seules les métadonnées de couche réseau sont disponibles.</p>
+    </div>`;
+  }
+
+  const sources = [
+    { name:'Attribution', status:'ok', detail:'OpenSnitch — PID '+Math.floor(Math.random()*9000+1000) },
+    { name:'Capture', status: f.vis==='attrib'?'off':'ok', detail: f.vis==='attrib'?'Non applicable':'nftables redirect' },
+    { name:'Décryptage', status: f.vis==='fully'?'ok':f.vis==='meta'?'warn':'off', detail: f.vis==='fully'?'PolarProxy':f.vis==='meta'?'Échoué (pinning)':'Non applicable' },
+    { name:'Keylog', status:'off', detail:'Non utilisé pour ce flux' }
+  ];
+
+  return `<div style="margin-bottom:16px"><button class="btn btn-ghost btn-sm" data-nav-back><i data-lucide="arrow-left" style="width:14px;height:14px"></i> Retour</button></div>
+    <div class="insp-header">
+      <div><div class="screen-title">Inspecteur de flux</div><div class="screen-subtitle" style="margin-bottom:0">${f.proc} → ${f.dest}</div></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" data-copy-headers><i data-lucide="clipboard" style="width:13px;height:13px"></i> Copier headers</button>
+        <button class="btn btn-sm" data-export-flow><i data-lucide="download" style="width:13px;height:13px"></i> Exporter JSON</button>
+      </div>
+    </div>
+
+    <div class="insp-tuple">
+      <div class="insp-field"><div class="insp-field-label">IP source</div><div class="insp-field-val mono">192.168.1.42</div></div>
+      <div class="insp-field"><div class="insp-field-label">Port source</div><div class="insp-field-val mono">${50000+Math.floor(Math.random()*10000)}</div></div>
+      <div class="insp-field"><div class="insp-field-label">IP destination</div><div class="insp-field-val mono">${f.ip}</div></div>
+      <div class="insp-field"><div class="insp-field-label">Port destination</div><div class="insp-field-val mono">${f.port}</div></div>
+      <div class="insp-field"><div class="insp-field-label">Protocole</div><div class="insp-field-val">${f.proto}</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Début</span><div class="mono" style="font-size:.85rem;margin-top:2px">${fmtTime(f.ts)}</div></div>
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Durée</span><div class="mono" style="font-size:.85rem;margin-top:2px">${fmtDur(f.dur)}</div></div>
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Processus</span><div style="margin-top:2px"><a href="#" style="color:var(--accent);text-decoration:none;font-weight:500" data-proc-link="${f.proc}">${f.proc}</a></div></div>
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Destination</span><div style="margin-top:2px"><a href="#" style="color:var(--accent);text-decoration:none;font-weight:500" data-dest-link="${f.dest}">${f.dest}</a></div></div>
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Taille</span><div class="mono" style="font-size:.85rem;margin-top:2px">${fmtSize(f.size)}</div></div>
+        <div><span style="font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Visibilité</span><div style="margin-top:2px">${visBadge(f.vis)}</div></div>
+      </div>
+    </div>
+
+    ${f.tls ? `<div class="card" style="margin-bottom:16px">
+      <div class="section-title">Certificat vu</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.82rem">
+        <div><span style="color:var(--t3)">Émetteur</span><div class="mono" style="margin-top:2px">Vitrail Local CA</div></div>
+        <div><span style="color:var(--t3)">Sujet</span><div class="mono" style="margin-top:2px">${f.dest}</div></div>
+        <div><span style="color:var(--t3)">Validité</span><div style="margin-top:2px">Du 2025-01-15 au 2026-01-15</div></div>
+        <div><span style="color:var(--t3)">Empreinte</span><div class="mono" style="margin-top:2px;font-size:.75rem">SHA-256: 7F:3A:...:C2</div></div>
+      </div>
+    </div>` : ''}
+
+    ${contentHtml}
+
+    <div class="card">
+      <div class="section-title">Sources de corrélation</div>
+      ${sources.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-s);font-size:.82rem">
+        <span class="ks-sub-status ${s.status==='ok'?'ok':s.status==='warn'?'wait':'off'}">${s.status==='ok'?'OK':s.status==='warn'?'Partiel':'N/A'}</span>
+        <span style="font-weight:500;width:100px">${s.name}</span>
+        <span style="color:var(--t3)">${s.detail}</span>
+      </div>`).join('')}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" data-flow-prev><i data-lucide="chevron-left" style="width:14px;height:14px"></i> Flux précédent</button>
+      <button class="btn btn-ghost btn-sm" data-flow-next>Flux suivant <i data-lucide="chevron-right" style="width:14px;height:14px"></i></button>
+    </div>`;
+}
+
+/* ── 6. Recherche avancée ── */
+function renderSearch() {
+  const visOptions = Object.values(VIS).map(v => `<option value="${v.key}">${v.label}</option>`).join('');
+  return `<div class="screen-title">Recherche avancée</div>
+    <div class="screen-subtitle">Requêtage libre sur l'historique stocké</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Processus</label><input class="input" placeholder="Nom ou chemin..." data-sq-proc></div>
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Domaine / IP</label><input class="input" placeholder="Ex: google.com" data-sq-dest></div>
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Port</label><input class="input" placeholder="443" data-sq-port></div>
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Niveau de visibilité</label><select class="input select" data-sq-vis><option value="">Tous</option>${visOptions}</select></div>
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Début</label><input class="input" type="time" data-sq-from></div>
+        <div><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Fin</label><input class="input" type="time" data-sq-to></div>
+      </div>
+      <div style="margin-top:14px"><label style="font-size:.73rem;font-weight:600;color:var(--t3);display:block;margin-bottom:4px">Recherche plein texte (contenu déchiffré)</label><input class="input" placeholder="Ex: password, token, api_key..." data-sq-text></div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" data-sq-run><i data-lucide="search" style="width:14px;height:14px"></i> Rechercher</button>
+        <button class="btn" data-sq-save><i data-lucide="bookmark" style="width:14px;height:14px"></i> Sauvegarder la requête</button>
+        <button class="btn" data-sq-to-alert><i data-lucide="bell-plus" style="width:14px;height:14px"></i> Transformer en alerte</button>
+      </div>
+    </div>
+    <div id="search-results"><div class="empty-state"><i data-lucide="search"></i><p>Ajoutez au moins un critère pour lancer la recherche</p></div></div>`;
+}
+
+/* ── 7. Alertes & Règles ── */
+function renderAlerts() {
+  let rulesHtml = alertRules.map(r => `<div class="alert-rule">
+    <div class="alert-rule-header">
+      <button class="toggle${r.active?' on':''}" data-toggle-rule="${r.id}" aria-label="Activer/désactiver"></button>
+      <span class="alert-rule-name">${r.name}</span>
+      ${r.active ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-attrib">Désactivée</span>'}
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-edit-rule="${r.id}"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
+        <button class="btn btn-ghost btn-sm" data-del-rule="${r.id}"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
+      </div>
+    </div>
+    <div style="font-size:.78rem;color:var(--t3);margin-bottom:8px">${r.desc}<br><span class="mono" style="font-size:.72rem">Critère : ${r.criteria}</span></div>
+    ${r.triggers.length ? `<div style="font-size:.72rem;font-weight:600;color:var(--t3);margin-bottom:6px">Derniers déclenchements</div>` +
+      r.triggers.map(t => `<div class="alert-trigger">
+        <span class="alert-trigger-time">${t.time}</span>
+        <span style="flex:1">${t.flow}</span>
+        ${visBadge(t.vis)}
+      </div>`).join('') : '<div style="font-size:.78rem;color:var(--t4);font-style:italic">Aucun déclenchement</div>'}
+  </div>`).join('');
+
+  return `<div class="screen-title">Alertes & Règles</div>
+    <div class="screen-subtitle">Signalement proactif basé sur des critères personnalisés</div>
+    <div style="margin-bottom:16px"><button class="btn btn-primary" data-create-rule><i data-lucide="plus" style="width:14px;height:14px"></i> Créer une règle</button></div>
+    ${rulesHtml || '<div class="empty-state"><i data-lucide="bell"></i><p>Aucune règle définie. Créez-en une pour être notifié proactivement lorsqu\'un événement réseau correspond à vos critères.</p></div>'}`;
+}
+
+/* ── 8. Kill Switch ── */
+function renderKillSwitch() {
+  const isActive = S.ksState === 'active';
+  const isTrans = S.ksState === 'transitioning';
+  const subStates = subsystems.map(sub => {
+    let st = 'off';
+    if (isActive) st = (sub.id === 'polarproxy' && S.ksState === 'degraded') ? 'err' : 'ok';
+    if (isTrans) st = 'wait';
+    return { ...sub, status: st };
+  });
+
+  return `<div class="screen-title">Kill Switch</div>
+    <div class="screen-subtitle">Garantie centrale d'activation et de désactivation complète</div>
+
+    <div class="ks-main-toggle ${isActive?'active':'inactive'}">
+      <div>
+        <div class="ks-toggle-label">${isActive ? 'Vitrail est actif' : 'Vitrail est inactif'}</div>
+        <div class="ks-toggle-sub">${isActive ? (S.activeSince ? 'Depuis '+fmtSince(S.activeSince) : '') : 'Aucun sous-système n\'est en cours d\'exécution'}</div>
+      </div>
+      <button class="ks-big-toggle${isActive?' on':''}" data-ks-main-toggle aria-label="Toggle kill switch"></button>
+    </div>
+
+    <div class="section-title" style="margin-bottom:8px">État des sous-systèmes</div>
+    ${subStates.map(sub => `<div class="ks-subsystem">
+      <div class="ks-sub-icon"><i data-lucide="${sub.icon}"></i></div>
+      <div class="ks-sub-info"><div class="ks-sub-name">${sub.name}</div><div class="ks-sub-detail">${sub.desc}</div></div>
+      <span class="ks-sub-status ${sub.status}">${sub.status==='ok'?'Actif':sub.status==='err'?'Erreur':sub.status==='wait'?'En cours':'Inactif'}</span>
+    </div>`).join('')}
+
+    <div class="ks-emergency">
+      <div class="ks-emergency-title">Arrêt d'urgence</div>
+      <div class="ks-emergency-desc">Force la désimmédiate de tous les sous-systèmes sans séquence orchestrée. À utiliser uniquement si la désactivation normale échoue.</div>
+      <button class="btn btn-danger" id="ks-emergency-btn" data-ks-emergency>Arrêt d'urgence</button>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">Journal d'audit</div>
+        <button class="btn btn-sm" data-ks-verify><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Vérifier l'état</button>
+      </div>
+      <div class="ks-log">
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:22</span><span class="ks-log-msg">Vérification post-activation — conforme</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:20</span><span class="ks-log-msg">Sous-système CA installée — OK</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:18</span><span class="ks-log-msg">Sous-système nftables — OK (chaîne VITRAIL)</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:15</span><span class="ks-log-msg">Sous-système keylog — initialisé</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:12</span><span class="ks-log-msg">Sous-système PolarProxy — démarré sur le port 8081</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:08</span><span class="ks-log-msg">Sous-système OpenSnitch — détecté, actif</span></div>
+        <div class="ks-log-entry"><span class="ks-log-time">14:58:05</span><span class="ks-log-msg">Début de la séquence d'activation</span></div>
+      </div>
+    </div>`;
+}
+
+/* ── 9. Paramètres ── */
+function renderSettings() {
+  const tabs = [
+    { id:'ca', label:'CA & TLS' },
+    { id:'network', label:'Réseau' },
+    { id:'exclusions', label:'Exclusions' },
+    { id:'retention', label:'Rétention' },
+    { id:'keylog', label:'Keylog SSL' },
+    { id:'notif', label:'Notifications' },
+    { id:'about', label:'À propos' }
+  ];
+
+  let sections = '';
+  /* 9.1 CA & TLS */
+  sections += `<div class="settings-section${S.settingsTab==='ca'?' active':''}" data-stab="ca">
+    <div class="setting-row"><div><div class="setting-label">Empreinte SHA-256 de la CA</div><div class="setting-desc">Certificat racine utilisé pour le déchiffrement local</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:.78rem;color:var(--t2)">4A:2B:C1:D8:...:F1:E3:00</span><button class="btn btn-ghost btn-sm" data-copy-ca><i data-lucide="clipboard" style="width:13px;height:13px"></i></button></div></div>
+    <div class="setting-row"><div><div class="setting-label">Statut trust store</div><div class="setting-desc">Installation du certificat dans le magasin de confiance système</div></div>
+      <span class="badge badge-ok">Installé</span></div>
+    <div class="setting-row"><div><div class="setting-label">Régénérer la CA</div><div class="setting-desc" style="color:var(--danger)">Attention : désactive Vitrail le temps de l'opération. Les applications utilisant l'ancienne CA devront être reconnectées.</div></div>
+      <button class="btn btn-danger btn-sm" data-regen-ca>Régénérer</button></div>
+  </div>`;
+
+  /* 9.2 Réseau */
+  sections += `<div class="settings-section${S.settingsTab==='network'?' active':''}" data-stab="network">
+    <div class="setting-row"><div><div class="setting-label">Chaîne nftables</div><div class="setting-desc">Nom fixe de la chaîne utilisée pour la redirection</div></div>
+      <span class="mono" style="font-size:.83rem;color:var(--t2);background:var(--bg2);padding:4px 10px;border-radius:var(--r-s)">VITRAIL</span></div>
+    <div class="setting-row"><div><div class="setting-label">Interfaces surveillées</div><div class="setting-desc">Interfaces réseau sur lesquelles le trafic est intercepté</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="badge badge-ok">en0 (Wi-Fi)</span>
+        <span class="badge badge-ok">utun0 (VPN)</span>
+        <span class="badge badge-attrib">en1 (Ethernet)</span>
+      </div></div>
+  </div>`;
+
+  /* 9.3 Exclusions */
+  sections += `<div class="settings-section${S.settingsTab==='exclusions'?' active':''}" data-stab="exclusions">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input class="input" style="width:280px" placeholder="Processus ou domaine à exclure..." id="excl-input">
+      <select class="input select" style="width:130px" id="excl-type"><option value="processus">Processus</option><option value="domaine">Domaine</option></select>
+      <button class="btn btn-primary btn-sm" data-add-excl><i data-lucide="plus" style="width:13px;height:13px"></i> Ajouter</button>
+    </div>
+    <ul class="excl-list" id="excl-list">${exclusions.map((e,i) => `<li class="excl-item">
+      <span class="excl-item-name">${e.name}</span><span class="excl-item-type">${e.type}</span>
+      <button class="btn btn-ghost btn-sm" data-rm-excl="${i}"><i data-lucide="x" style="width:13px;height:13px"></i></button>
+    </li>`).join('')}</ul>
+  </div>`;
+
+  /* 9.4 Rétention */
+  sections += `<div class="settings-section${S.settingsTab==='retention'?' active':''}" data-stab="retention">
+    <div class="setting-row"><div><div class="setting-label">Politique de rétention</div><div class="setting-desc">Durée de conservation des données de trafic</div></div>
+      <select class="input select" style="width:180px"><option>7 jours</option><option>30 jours</option><option selected>Illimité</option></select></div>
+    <div class="setting-row"><div><div class="setting-label">Taille de la base de données</div><div class="setting-desc">Espace disque utilisé actuellement</div></div>
+      <span style="font-weight:500">42,3 Mo</span></div>
+    <div class="setting-row"><div><div class="setting-label">Purge manuelle</div><div class="setting-desc">Supprimer les données stockées</div></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-sm" data-purge-date>Purger par date</button><button class="btn btn-danger btn-sm" data-purge-all>Purge totale</button></div></div>
+    <div class="setting-row"><div><div class="setting-label">Exporter la configuration</div><div class="setting-desc">Sauvegarder la config (pas les données)</div></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-sm" data-export-config>Exporter</button><button class="btn btn-sm" data-import-config>Importer</button></div></div>
+  </div>`;
+
+  /* 9.5 Keylog */
+  sections += `<div class="settings-section${S.settingsTab==='keylog'?' active':''}" data-stab="keylog">
+    <div style="font-size:.82rem;color:var(--t3);margin-bottom:16px;line-height:1.6">Les applications listées ici exportent leurs clés TLS via SSLKEYLOGFILE, permettant le déchiffrement même quand le MITM est contourné par du pinning.</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input class="input" style="width:280px" placeholder="Chemin de l'exécutable..." id="keylog-input">
+      <button class="btn btn-primary btn-sm" data-add-keylog><i data-lucide="plus" style="width:13px;height:13px"></i> Ajouter</button>
+    </div>
+    <ul class="excl-list">
+      <li class="excl-item"><span class="excl-item-name mono">/Applications/Google Chrome.app/Contents/MacOS/Google Chrome</span><span class="excl-item-type">keylog</span><button class="btn btn-ghost btn-sm"><i data-lucide="x" style="width:13px;height:13px"></i></button></li>
+      <li class="excl-item"><span class="excl-item-name mono">/Applications/Firefox.app/Contents/MacOS/firefox</span><span class="excl-item-type">keylog</span><button class="btn btn-ghost btn-sm"><i data-lucide="x" style="width:13px;height:13px"></i></button></li>
+      <li class="excl-item"><span class="excl-item-name mono">/Applications/Visual Studio Code.app/Contents/MacOS/Electron</span><span class="excl-item-type">keylog</span><button class="btn btn-ghost btn-sm"><i data-lucide="x" style="width:13px;height:13px"></i></button></li>
+    </ul>
+  </div>`;
+
+  /* 9.6 Notifications */
+  sections += `<div class="settings-section${S.settingsTab==='notif'?' active':''}" data-stab="notif">
+    <div class="setting-row"><div><div class="setting-label">Notifications desktop</div><div class="setting-desc">Afficher des notifications système lors du déclenchement d'alertes</div></div>
+      <button class="toggle on" aria-label="Toggle notifications"></button></div>
+    <div class="setting-row"><div><div class="setting-label">Son de notification</div><div class="setting-desc">Jouer un son lors d'une alerte</div></div>
+      <button class="toggle" aria-label="Toggle son"></button></div>
+  </div>`;
+
+  /* 9.7 À propos */
+  sections += `<div class="settings-section${S.settingsTab==='about'?' active':''}" data-stab="about">
+    <div class="setting-row"><div><div class="setting-label">Version de Vitrail</div></div><span style="font-weight:500">0.1.0-alpha</span></div>
+    <div class="setting-row"><div><div class="setting-label">OpenSnitch</div></div><span style="font-weight:500">1.6.6 — détecté</span></div>
+    <div class="setting-row"><div><div class="setting-label">PolarProxy</div></div><span style="font-weight:500">1.04 — détecté</span></div>
+    <div class="setting-row"><div><div class="setting-label">Journal système</div><div class="setting-desc">Logs bruts des sous-systèmes</div></div><button class="btn btn-sm" data-nav="logs">Ouvrir</button></div>
+    <div class="setting-row"><div><div class="setting-label">Confidentialité</div><div class="setting-desc">Transparence sur le traitement des données</div></div><button class="btn btn-sm" data-nav="privacy">Ouvrir</button></div>
+  </div>`;
+
+  return `<div class="screen-title">Paramètres</div><div class="screen-subtitle">Configuration de Vitrail</div>
+    <div class="settings-tabs">${tabs.map(t => `<button class="settings-tab${S.settingsTab===t.id?' active':''}" data-stab-btn="${t.id}">${t.label}</button>`).join('')}</div>
+    <div class="card">${sections}</div>`;
+}
+
+/* ── 10. Confidentialité ── */
+function renderPrivacy() {
+  return `<div class="screen-title">Confidentialité & gouvernance des données</div>
+    <div class="screen-subtitle">Transparence sur le traitement de vos données</div>
+
+    <div class="card" style="margin-bottom:16px;border-color:rgba(45,90,61,.2);background:var(--ok-l)">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <i data-lucide="shield-check" style="width:24px;height:24px;color:var(--ok);flex-shrink:0;margin-top:2px"></i>
+        <div>
+          <div style="font-weight:600;color:var(--ok);margin-bottom:6px">Tout reste local, toujours</div>
+          <p style="font-size:.85rem;color:var(--t2);line-height:1.7">Aucune donnée — ni métadonnée, ni contenu déchiffré, ni statistique d'usage — n'est jamais envoyée, transmise ou partagée en dehors de cette machine. Vitrail ne contacte aucun serveur distant. Il n'y a pas de télémétrie, pas de rapport d'erreur automatique, pas de vérification de mise à jour en arrière-plan.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title">Emplacement des fichiers</div>
+      <div style="display:grid;gap:12px;font-size:.83rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-s)">
+          <span>Certificat CA (clé privée)</span><span class="mono" style="font-size:.78rem;color:var(--t2)">~/.vitrail/ca/key.pem</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-s)">
+          <span>Certificat CA (certificat public)</span><span class="mono" style="font-size:.78rem;color:var(--t2)">~/.vitrail/ca/cert.pem</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-s)">
+          <span>Base de données (trafic)</span><span class="mono" style="font-size:.78rem;color:var(--t2)">~/.vitrail/data/vitrail.db</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-s)">
+          <span>Fichier keylog SSL</span><span class="mono" style="font-size:.78rem;color:var(--t2)">~/.vitrail/keylog/sslkeys.log</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+          <span>Logs système</span><span class="mono" style="font-size:.78rem;color:var(--t2)">~/.vitrail/logs/</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title">Ce qui est stocké en clair sur disque</div>
+      <div style="font-size:.83rem;line-height:1.8;color:var(--t2)">
+        <p style="margin-bottom:8px"><strong style="color:var(--t1)">En clair :</strong> le contenu des requêtes/réponses HTTP déchiffrées (headers, corps), les métadonnées de tous les flux (5-tuple, timestamps, tailles), les clés TLS exportées via SSLKEYLOGFILE.</p>
+        <p><strong style="color:var(--t1)">Jamais stocké :</strong> les clés privées de la CA ne quittent pas le répertoire CA. Les flux non déchiffrés (pinning) ne stockent que des métadonnées réseau. Aucun payload binaire supérieur à 1 Mo n'est stocké inline (référence uniquement).</p>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(184,59,52,.2);background:var(--danger-l)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-weight:600;color:var(--danger);margin-bottom:2px">Purge totale et immédiate</div><div style="font-size:.8rem;color:var(--danger);opacity:.8">Supprime définitivement toutes les données collectées : base de données, logs, clés TLS exportées. Cette action est irréversible.</div></div>
+        <button class="btn btn-danger" data-purge-all> tout purger</button>
+      </div>
+    </div>`;
+}
+
+/* ── 11. Logs ── */
+function renderLogs() {
+  const levels = ['info','warn','error'];
+  const subs = ['attribution','capture','decryption','keylog','killswitch'];
+  const logEntries = [
+    { time:'14:58:22', level:'info', sub:'killswitch', msg:'Vérification post-activation terminée — conforme' },
+    { time:'14:58:18', level:'info', sub:'capture', msg:'Chaîne nftables VITRAIL active sur en0, utun0' },
+    { time:'14:58:15', level:'info', sub:'keylog', msg:'Fichier SSLKEYLOGFILE initialisé : ~/.vitrail/keylog/sslkeys.log' },
+    { time:'14:58:12', level:'info', sub:'decryption', msg:'PolarProxy démarré (PID 8842), port 8081, CA chargée' },
+    { time:'14:58:08', level:'info', sub:'attribution', msg:'OpenSnitch daemon détecté (v1.6.6), connecté via socket UNIX' },
+    { time:'14:57:55', level:'warn', sub:'decryption', msg:'PolarProxy : le flux vers discord.gg a été mis en fail-open (pinning détecté)' },
+    { time:'14:57:40', level:'warn', sub:'decryption', msg:'PolarProxy : le flux vers slack.com a été mis en fail-open (pinning détecté)' },
+    { time:'14:45:12', level:'error', sub:'attribution', msg:'Timeout de connexion au socket OpenSnitch — nouvelle tentative dans 2s' },
+    { time:'14:45:14', level:'info', sub:'attribution', msg:'Reconnexion au socket OpenSnitch réussie' },
+    { time:'14:30:00', level:'info', sub:'capture', msg:'Flux capturé : 192.168.1.42:52341 → 142.250.74.238:443 (TCP)' },
+    { time:'14:28:33', level:'warn', sub:'keylog', msg:'Chrome : clé exportée pour session TLS (SNI=api.google.com)' },
+    { time:'14:15:08', level:'info', sub:'decryption', msg:'Déchiffrement réussi : GET https://github.com/api/v3/repos/... (200 OK)' }
+  ];
+
+  return `<div class="screen-title">Journal système</div>
+    <div class="screen-subtitle">Logs structurés de chaque sous-système</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <select class="input select" style="width:160px" id="log-sub"><option value="">Tous les sous-systèmes</option>${subs.map(s=>`<option>${s}</option>`).join('')}</select>
+      <select class="input select" style="width:130px" id="log-level"><option value="">Tous niveaux</option>${levels.map(l=>`<option>${l}</option>`).join('')}</select>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-sm" data-copy-logs><i data-lucide="clipboard" style="width:13px;height:13px"></i> Copier</button>
+        <button class="btn btn-sm" data-export-logs><i data-lucide="download" style="width:13px;height:13px"></i> Exporter</button>
+        <button class="btn btn-danger btn-sm" data-purge-logs><i data-lucide="trash-2" style="width:13px;height:13px"></i> Purger</button>
+      </div>
+    </div>
+    <div class="ks-log" style="max-height:calc(100vh - 260px)">
+      ${logEntries.map(e => {
+        const lvlCls = e.level==='error'?'color:var(--danger);font-weight:600':e.level==='warn'?'color:var(--warn);font-weight:500':'color:var(--t2)';
+        return `<div class="ks-log-entry"><span class="ks-log-time">${e.time}</span><span style="font-size:.7rem;color:var(--t3);width:90px;flex-shrink:0">${e.sub}</span><span style="font-size:.7rem;width:40px;flex-shrink:0;${lvlCls}">${e.level.toUpperCase()}</span><span class="ks-log-msg">${e.msg}</span></div>`;
+      }).join('')}
+    </div>`;
+}
+
+/* ── 12. Historique ── */
+function renderHistory() {
+  return `<div class="screen-title">Historique</div>
+    <div class="screen-subtitle">Sessions passées — rétrospective</div>
+    ${sessions.length ? `<div class="card-grid card-grid-1" style="gap:12px">${sessions.map(s => `<div class="card" style="display:flex;align-items:center;gap:20px;cursor:pointer" data-session="${s.id}">
+      <div style="flex:1">
+        <div style="font-weight:500;font-size:.9rem;margin-bottom:4px">${fmtDate(s.start)} — ${fmtTime(s.end)}</div>
+        <div style="font-size:.78rem;color:var(--t3)">Durée : ${fmtSince(s.start)} de capture</div>
+      </div>
+      <div style="display:flex;gap:24px;text-align:center">
+        <div><div class="metric-value" style="font-size:1.1rem">${fmtVol(s.vol)}</div><div class="metric-label">Volume</div></div>
+        <div><div class="metric-value" style="font-size:1.1rem">${s.procs}</div><div class="metric-label">Processus</div></div>
+        <div><div class="metric-value" style="font-size:1.1rem;color:${s.alerts?'var(--warn)':'var(--t3)'}">${s.alerts}</div><div class="metric-label">Alertes</div></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" data-session-report="${s.id}"><i data-lucide="file-text" style="width:13px;height:13px"></i> Rapport</button>
+        <button class="btn btn-ghost btn-sm" data-session-del="${s.id}"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
+      </div>
+    </div>`).join('')}</div>` : '<div class="empty-state"><i data-lucide="clock"></i><p>Aucune session passée. Les sessions apparaîtront ici après chaque cycle d\'activation/désactivation.</p></div>'}`;
+}
+
+/* ═══════════════════════════════════════════
+   Post-rendu : animations, compteurs
+   ═══════════════════════════════════════════ */
+function afterRender() {
+  /* Compteurs animés sur le dashboard */
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = parseFloat(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    animNum(el, target, suffix);
+  });
+}
+
+/* ═══════════════════════════════════════════
+   Navigation & événements
+   ═══════════════════════════════════════════ */
+function navigate(screen) {
+  S.screen = screen;
+  renderSidebar();
+  renderTopbar();
+  renderScreen();
+}
+
+function toggleKS() {
+  if (S.ksState === 'active' || S.ksState === 'degraded') {
+    S.ksState = 'inactive';
+    S.activeSince = null;
+  } else {
+    S.ksState = 'transitioning';
+    renderSidebar(); renderTopbar();
+    setTimeout(() => {
+      S.ksState = 'active';
+      S.activeSince = Date.now();
+      S.activeConns = 23;
+      S.totalIn = 847.3;
+      S.totalOut = 312.8;
+      S.metaCount = flows.filter(f => f.vis === 'meta').length;
+      renderSidebar(); renderTopbar();
+      if (S.screen === 'dashboard') renderScreen();
+    }, 1500);
+    return;
+  }
+  renderSidebar(); renderTopbar();
+  if (S.screen === 'dashboard') renderScreen();
+}
+
+/* Délégation d'événements */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-nav]');
+  if (t) { navigate(t.dataset.nav); return; }
+
+  if (e.target.closest('#ks-quick-toggle') || e.target.closest('[data-ks-activate]') || e.target.closest('[data-ks-main-toggle]')) {
+    toggleKS(); return;
+  }
+
+  if (e.target.closest('[data-ks-emergency]')) {
+    const btn = e.target.closest('[data-ks-emergency]');
+    if (btn.textContent.includes('Confirmer')) {
+      S.ksState = 'inactive'; S.activeSince = null;
+      renderSidebar(); renderTopbar(); renderScreen();
+    } else {
+      btn.textContent = 'Confirmer l\'arrêt d\'urgence';
+      btn.style.fontWeight = '700';
+      setTimeout(() => { btn.textContent = 'Arrêt d\'urgence'; btn.style.fontWeight = ''; }, 3000);
+    }
+    return;
+  }
+
+  if (e.target.closest('[data-flow-id]')) {
+    const id = e.target.closest('[data-flow-id]').dataset.flowId;
+    S.inspectedFlow = flows.find(f => f.id === id) || flows[0];
+    navigate('inspector'); return;
+  }
+
+  if (e.target.closest('[data-flow-prev]')) {
+    const idx = flows.indexOf(S.inspectedFlow);
+    if (idx > 0) { S.inspectedFlow = flows[idx - 1]; renderScreen(); } return;
+  }
+  if (e.target.closest('[data-flow-next]')) {
+    const idx = flows.indexOf(S.inspectedFlow);
+    if (idx < flows.length - 1) { S.inspectedFlow = flows[idx + 1]; renderScreen(); } return;
+  }
+
+  if (e.target.closest('[data-nav-back]')) {
+    navigate('timeline'); return;
+  }
+
+  if (e.target.closest('[data-tl-pause]')) {
+    S.timelinePaused = !S.timelinePaused;
+    if (S.screen === 'timeline') renderScreen();
+    return;
+  }
+
+  if (e.target.closest('[data-onboard-next]')) {
+    S.onboardStep = Math.min(S.onboardStep + 1, 4);
+    renderScreen(); return;
+  }
+  if (e.target.closest('[data-onboard-prev]')) {
+    S.onboardStep = Math.max(S.onboardStep - 1, 0);
+    renderScreen(); return;
+  }
+  if (e.target.closest('[data-onboard-done]')) {
+    S.onboardingDone = true;
+    navigate('dashboard'); return;
+  }
+
+  if (e.target.closest('[data-stab-btn]')) {
+    S.settingsTab = e.target.closest('[data-stab-btn]').dataset.stabBtn;
+    document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b.dataset.stabBtn === S.settingsTab));
+    document.querySelectorAll('.settings-section').forEach(s => s.classList.toggle('active', s.dataset.stab === S.settingsTab));
+    lucide.createIcons(); return;
+  }
+
+  if (e.target.closest('[data-toggle-rule]')) {
+    const id = e.target.closest('[data-toggle-rule]').dataset.toggleRule;
+    const rule = alertRules.find(r => r.id === id);
+    if (rule) rule.active = !rule.active;
+    renderScreen(); renderSidebar(); return;
+  }
+
+  if (e.target.closest('[data-add-excl]')) {
+    const input = document.getElementById('excl-input');
+    const type = document.getElementById('excl-type').value;
+    if (input.value.trim()) {
+      exclusions.push({ name: input.value.trim(), type });
+      renderScreen(); return;
+    }
+    return;
+  }
+
+  if (e.target.closest('[data-rm-excl]')) {
+    const idx = parseInt(e.target.closest('[data-rm-excl]').dataset.rmExcl);
+    exclusions.splice(idx, 1);
+    renderScreen(); return;
+  }
+
+  if (e.target.closest('[data-proc-detail]')) {
+    const name = e.target.closest('[data-proc-detail]').dataset.procDetail;
+    const p = processes.find(pr => pr.name === name);
+    if (!p) return;
+    const panel = document.getElementById('proc-detail-panel');
+    panel.innerHTML = `<div class="card" style="animation:screenIn .3s var(--ease) both">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div><div style="font-weight:600;font-size:1rem">${p.name}</div><div class="mono" style="font-size:.75rem;color:var(--t3)">${p.path}</div></div>
+        ${visBadge(p.vis)}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="insp-field"><div class="insp-field-label">Volume total</div><div class="insp-field-val">${fmtVol(p.vol)}</div></div>
+        <div class="insp-field"><div class="insp-field-label">Destinations</div><div class="insp-field-val">${p.dests}</div></div>
+        <div class="insp-field"><div class="insp-field-label">PIDs actifs</div><div class="insp-field-val mono">${p.pids.join(', ')}</div></div>
+        <div class="insp-field"><div class="insp-field-label">Keylog</div><div class="insp-field-val">${p.keylog?'Oui':'Non'}</div></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" data-nav="timeline"><i data-lucide="activity" style="width:13px;height:13px"></i> Voir dans la Timeline</button>
+        <button class="btn btn-sm" data-excl-proc="${p.name}"><i data-lucide="ban" style="width:13px;height:13px"></i> Exclure du MITM</button>
+      </div>
+    </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  if (e.target.closest('[data-excl-proc]')) {
+    const name = e.target.closest('[data-excl-proc]').dataset.exclProc;
+    if (!exclusions.find(ex => ex.name === name)) {
+      exclusions.push({ name, type: 'processus' });
+    }
+    /* Toast de confirmation */
+    showToast(`${name} ajouté aux exclusions`);
+    return;
+  }
+
+  if (e.target.closest('[data-dest-detail]')) {
+    const domain = e.target.closest('[data-dest-detail]').dataset.destDetail;
+    const d = destinations.find(dd => dd.domain === domain);
+    if (!d) return;
+    const procsHere = processes.filter(p => {
+      return flows.some(f => f.dest === domain && f.proc === p.name);
+    });
+    const panel = document.getElementById('dest-detail-panel');
+    panel.innerHTML = `<div class="card" style="animation:screenIn .3s var(--ease) both">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div><div style="font-weight:600;font-size:1rem">${d.domain}</div><div class="mono" style="font-size:.75rem;color:var(--t3)">${d.ip}</div></div>
+        ${visBadge(d.vis)}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="insp-field"><div class="insp-field-label">Volume total</div><div class="insp-field-val">${fmtVol(d.vol)}</div></div>
+        <div class="insp-field"><div class="insp-field-label">Processus</div><div class="insp-field-val">${d.procs}</div></div>
+        <div class="insp-field"><div class="insp-field-label">TLS</div><div class="insp-field-val">${d.tls?'Oui':'Non'}</div></div>
+        <div class="insp-field"><div class="insp-field-label">Pinning</div><div class="insp-field-val">${d.pinning?'Oui':'Non'}</div></div>
+      </div>
+      <div style="font-size:.78rem;font-weight:600;color:var(--t3);margin-bottom:8px">Processus contactant cette destination</div>
+      ${procsHere.map(p => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-s);font-size:.82rem">
+        <span style="font-weight:500">${p.name}</span>${visBadge(p.vis)}<span style="margin-left:auto;color:var(--t3)">${fmtVol(p.vol)}</span>
+      </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-sm" data-nav="timeline"><i data-lucide="activity" style="width:13px;height:13px"></i> Voir dans la Timeline</button>
+        <button class="btn btn-sm" data-excl-dest="${d.domain}"><i data-lucide="ban" style="width:13px;height:13px"></i> Exclure</button>
+        <button class="btn btn-sm" data-tag-dest="${d.domain}"><i data-lucide="tag" style="width:13px;height:13px"></i> Taguer</button>
+      </div>
+    </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  if (e.target.closest('[data-excl-dest]')) {
+    const name = e.target.closest('[data-excl-dest]').dataset.exclDest;
+    if (!exclusions.find(ex => ex.name === name)) {
+      exclusions.push({ name, type: 'domaine' });
+    }
+    showToast(`${name} ajouté aux exclusions`);
+    return;
+  }
+
+  if (e.target.closest('[data-sq-run]')) {
+    const results = document.getElementById('search-results');
+    const filtered = flows.slice(0, 8);
+    results.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Heure</th><th>Processus</th><th>Destination</th><th>Visibilité</th><th></th></tr></thead>
+      <tbody>${filtered.map(f => `<tr data-flow-id="${f.id}" style="cursor:pointer">
+        <td class="mono" style="white-space:nowrap">${fmtTime(f.ts)}</td>
+        <td style="font-weight:500">${f.proc}</td>
+        <td class="mono">${f.dest}</td>
+        <td>${visBadge(f.vis)}</td>
+        <td><button class="btn btn-ghost btn-sm" data-flow-id="${f.id}">Inspecter</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div><div style="font-size:.78rem;color:var(--t3);margin-top:8px">${filtered.length} résultats</div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  if (e.target.closest('[data-copy-headers]') || e.target.closest('[data-copy-ca]') || e.target.closest('[data-copy-logs]')) {
+    showToast('Copié dans le presse-papiers');
+    return;
+  }
+
+  if (e.target.closest('[data-export-flow]') || e.target.closest('[data-tl-export-json]') || e.target.closest('[data-tl-export-csv]') || e.target.closest('[data-export-logs]') || e.target.closest('[data-export-config]') || e.target.closest('[data-session-report]')) {
+    showToast('Export lancé');
+    return;
+  }
+
+  if (e.target.closest('[data-purge-all]') || e.target.closest('[data-purge-logs]') || e.target.closest('[data-session-del]')) {
+    showToast('Action de purge effectuée');
+    return;
+  }
+
+  if (e.target.closest('[data-regen-ca]')) {
+    showToast('Régénération de la CA lancée — Vitrail sera temporairement désactivé');
+    return;
+  }
+
+  if (e.target.closest('[data-create-rule]') || e.target.closest('[data-sq-save]') || e.target.closest('[data-sq-to-alert]')) {
+    showToast('Fonctionnalité disponible dans la version complète');
+    return;
+  }
+
+  /* Toggles génériques */
+  if (e.target.closest('.toggle') && !e.target.closest('[data-toggle-rule]')) {
+    e.target.closest('.toggle').classList.toggle('on');
+    return;
+  }
+});
+
+/* Filtres timeline en temps réel */
+document.addEventListener('input', e => {
+  if (e.target.matches('[data-tl-search]') || e.target.matches('[data-tl-vis]') || e.target.matches('[data-tl-proc]') || e.target.matches('[data-tl-port]')) {
+    const search = (document.querySelector('[data-tl-search]')?.value || '').toLowerCase();
+    const vis = document.querySelector('[data-tl-vis]')?.value || '';
+    const proc = document.querySelector('[data-tl-proc]')?.value || '';
+    const port = document.querySelector('[data-tl-port]')?.value || '';
+    const rows = document.querySelectorAll('#content tbody tr[data-flow-id]');
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      const matchSearch = !search || text.includes(search);
+      const matchVis = !vis || text.includes(VIS[vis]?.label?.toLowerCase() || '');
+      const matchProc = !proc || text.includes(proc.toLowerCase());
+      const matchPort = !port || text.includes(port);
+      row.style.display = (matchSearch && matchVis && matchProc && matchPort) ? '' : 'none';
+    });
+    return;
+  }
+  if (e.target.matches('[data-proc-filter]')) {
+    const v = e.target.value.toLowerCase();
+    document.querySelectorAll('#content tbody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(v) ? '' : 'none';
+    });
+    return;
+  }
+  if (e.target.matches('[data-dest-filter]')) {
+    const v = e.target.value.toLowerCase();
+    document.querySelectorAll('#content tbody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(v) ? '' : 'none';
+    });
+    return;
+  }
+  if (e.target.matches('#log-sub') || e.target.matches('#log-level')) {
+    const sub = document.getElementById('log-sub')?.value || '';
+    const level = document.getElementById('log-level')?.value || '';
+    document.querySelectorAll('.ks-log-entry').forEach(entry => {
+      const text = entry.textContent.toLowerCase();
+      const matchSub = !sub || text.includes(sub.toLowerCase());
+      const matchLevel = !level || text.includes(level.toUpperCase());
+      entry.style.display = (matchSub && matchLevel) ? '' : 'none';
+    });
+    return;
+  }
+});
+
+/* ═══════════════════════════════════════════
+   Toast (remplace alert)
+   ═══════════════════════════════════════════ */
+function showToast(msg) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:100000;display:flex;flex-direction:column;gap:8px;pointer-events:none';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.style.cssText = 'background:var(--t1);color:#fff;padding:10px 18px;border-radius:var(--r-m);font-size:.82rem;font-family:var(--font-b);pointer-events:auto;animation:screenIn .3s var(--ease) both;box-shadow:var(--sh-l)';
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
+/* ═══════════════════════════════════════════
+   Initialisation
+   ═══════════════════════════════════════════ */
+function init() {
+  renderSidebar();
+  renderTopbar();
+  renderScreen();
+  lucide.createIcons();
+}
+init();
+</script>
+</body>
+</html>

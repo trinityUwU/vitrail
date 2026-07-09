@@ -1,0 +1,39 @@
+/* Styles spécifiques au panneau Kill Switch — portés depuis docs/Mockup.html. */
+.ks-main-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 20px; padding: 40px; margin-bottom: 24px;
+  border-radius: var(--r-xl); border: 2px solid var(--border); background: var(--surface); transition: all .3s var(--ease);
+}
+.ks-main-toggle.active { border-color: var(--ok); background: var(--ok-l); }
+.ks-main-toggle.inactive { border-color: var(--border); }
+.ks-big-toggle {
+  width: 56px; height: 30px; border-radius: 15px; background: var(--t4); cursor: pointer; position: relative;
+  border: none; outline: none; transition: background .3s var(--ease);
+}
+.ks-big-toggle.on { background: var(--ok); }
+.ks-big-toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .15); transition: transform .35s var(--ease);
+}
+.ks-big-toggle.on::after { transform: translateX(26px); }
+.ks-toggle-label { font-family: var(--font-d); font-size: 1.3rem; color: var(--t1); }
+.ks-toggle-sub { font-size: .78rem; color: var(--t3); }
+
+.ks-subsystem {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-m); border: 1px solid var(--border-s);
+  background: var(--surface); transition: all .25s var(--ease); margin-bottom: 8px;
+}
+.ks-subsystem:hover { border-color: var(--border); }
+.ks-sub-icon { width: 36px; height: 36px; border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; background: var(--bg2); }
+.ks-sub-icon svg { width: 17px; height: 17px; color: var(--t2); }
+.ks-sub-info { flex: 1; }
+.ks-sub-name { font-size: .83rem; font-weight: 500; color: var(--t1); }
+.ks-sub-detail { font-size: .72rem; color: var(--t3); }
+
+.ks-emergency { border: 2px solid rgba(184, 59, 52, .25); border-radius: var(--r-l); padding: 24px; text-align: center; background: var(--danger-l); margin-top: 24px; }
+.ks-emergency-title { font-size: .82rem; font-weight: 600; color: var(--danger); margin-bottom: 6px; }
+.ks-emergency-desc { font-size: .75rem; color: var(--danger); opacity: .7; margin-bottom: 14px; }
+
+.ks-log { max-height: 200px; overflow-y: auto; font-size: .75rem; padding: 12px; background: var(--bg2); border-radius: var(--r-m); margin-top: 16px; }
+.ks-log-entry { padding: 3px 0; border-bottom: 1px solid var(--border-s); display: flex; gap: 8px; }
+.ks-log-time { color: var(--t3); white-space: nowrap; font-family: 'SF Mono', monospace; font-size: .7rem; }
+.ks-log-msg { color: var(--t2); }

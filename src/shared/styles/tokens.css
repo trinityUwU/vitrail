@@ -1,0 +1,45 @@
+/* Design tokens portés tels quels depuis docs/Mockup.html (:root). Ne pas modifier les
+   valeurs — couleurs/espacements/typographie déjà validés (cf. brief de portage). */
+:root {
+  --bg: #FAFAF7;
+  --bg2: #F3F2EE;
+  --bg3: #EBEAE5;
+  --surface: #FFFFFF;
+  --surface-h: #F8F8F6;
+  --t1: #1A1A1A;
+  --t2: #636366;
+  --t3: #A1A1A6;
+  --t4: #D1D1D3;
+  --accent: #2D5A3D;
+  --accent-h: #244D32;
+  --accent-l: #E8F0EA;
+  --accent-s: #F2F7F4;
+  --border: #E5E5E0;
+  --border-s: #F0F0EC;
+  --danger: #B83B34;
+  --danger-l: #FDF0EF;
+  --warn: #B8860B;
+  --warn-l: #FDF8ED;
+  --ok: #2D5A3D;
+  --ok-l: #E8F0EA;
+  --meta: #C07B2A;
+  --meta-l: #FDF5E8;
+  --attrib: #8E8E93;
+  --attrib-l: #F2F2F2;
+  --unknown: #AEAEB2;
+  --unknown-l: #F5F5F5;
+  --sh-s: 0 1px 2px rgba(0, 0, 0, .04);
+  --sh-m: 0 4px 16px rgba(0, 0, 0, .06);
+  --sh-l: 0 12px 40px rgba(0, 0, 0, .08);
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 14px;
+  --r-xl: 20px;
+  --sidebar: 248px;
+  --topbar: 56px;
+  /* Google Fonts CDN retiré (règle projet : zéro exposition réseau, cf. ARCHITECTURE.md) —
+     piles système équivalentes en attendant un éventuel self-host des polices. */
+  --font-d: Georgia, 'DM Serif Display', serif;
+  --font-b: system-ui, -apple-system, 'Segoe UI', Outfit, sans-serif;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
