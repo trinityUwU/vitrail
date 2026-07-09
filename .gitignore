@@ -1,0 +1,26 @@
+# Rust / Tauri
+/src-tauri/target/
+/src-tauri/gen/
+
+# Bun / Node frontend
+node_modules/
+dist/
+.vite/
+
+# Données locales sensibles (jamais versionnées)
+*.db
+*.db-wal
+*.db-shm
+*.sslkeylog
+*.pem
+*.key
+
+# Logs (reset par start.sh, jamais versionnés)
+logs/*
+!logs/.gitkeep
+
+# Env
+.env
+
+# OS/editeur
+.DS_Store

@@ -1,0 +1,186 @@
+# Vitrail — Plan technique
+
+Document de référence pour l'architecture complète. `ARCHITECTURE.md` (racine) résume les
+frontières de domaines ; ce fichier détaille le raisonnement, les flux de données et les
+décisions techniques.
+
+## 1. Problème et périmètre
+
+Donner à un utilisateur d'une machine Linux (Arch/Hyprland dans le cas de Chris, mais
+généralisable à toute distro) une vue **complète, claire et réversible** de tout le trafic
+réseau entrant/sortant de sa machine — y compris le contenu applicatif transporté en TLS —
+sans jamais laisser de résidu quand l'outil est coupé, et sans casser les applications qui
+font du certificate pinning.
+
+Périmètre v1 :
+- Une seule machine, un seul utilisateur.
+- Application locale (Tauri), **aucune exposition réseau** — ni LAN ni Internet. Le doute
+  initial ("accessible depuis le réseau") est résolu par défaut sur *aucune surface réseau
+  du tout* : c'est une app de bureau, IPC Tauri interne uniquement. Si un dashboard
+  consultable depuis un autre appareil (téléphone) est voulu plus tard, ce sera une
+  décision produit explicite à part (surface d'attaque supplémentaire), pas un défaut v1.
+- Linux uniquement. Pas de portage Windows/macOS prévu.
+- Pas de blocage de trafic en v1 (observation pure). Le blocage (façon pare-feu interactif)
+  est une extension possible via OpenSnitch mais hors scope initial — Vitrail *consomme*
+  les décisions d'OpenSnitch, il n'en prend pas de nouvelles.
+
+## 2. Non-réinvention — état de l'art (recherche 2026-07-09)
+
+| Besoin | Outil existant | Rôle dans Vitrail |
+|---|---|---|
+| Attribution processus ↔ connexion | [OpenSnitch](https://github.com/evilsocket/opensnitch) (eBPF, Go daemon, gRPC) | Source d'événements d'attribution, consommé tel quel |
+| Décryptage TLS actif + repli sur pinning | [PolarProxy](https://www.netresec.com/?page=PolarProxy) (Netresec, fail-open mode natif) | Source de flux déchiffrés, orchestré comme sous-processus |
+| Décryptage TLS coopératif sans interception | `SSLKEYLOGFILE` (standard NSS/BoringSSL/OpenSSL) | Pipeline complémentaire pour apps qui exportent leurs clés (Firefox, Chrome, curl, Node) |
+| Capture brute / métadonnées de flux | libpcap / AF_PACKET | Visibilité de base indépendante du TLS (DNS, QUIC, plaintext) |
+
+Aucun outil existant ne fait la fusion des trois premières sources dans une timeline unique
+avec attribution + contenu + réversibilité garantie. **C'est la valeur ajoutée de Vitrail** :
+une couche d'orchestration et de corrélation, pas un nouveau moteur de capture/décryptage.
+
+Concurrents partiels à citer dans le README pour se positionner honnêtement :
+- **Sniffnet** (Rust, GUI) — visibilité de flux, zéro décryptage TLS, zéro attribution
+  processus native au niveau du détail voulu.
+- **Wireshark + SSLKEYLOGFILE** — le standard historique, mais scriptable/manuel, pas de
+  vue "application-centric" ni de kill switch unifié.
+- **OpenSnitch seul** — attribution excellente, aucune visibilité sur le contenu.
+
+## 3. Architecture générale
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Vitrail (Tauri app)                     │
+│                                                                   │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐     │
+│  │attribution│  │  capture  │  │decryption │  │  keylog   │     │
+│  │ (OpenSnitch│  │ (libpcap/ │  │(PolarProxy │  │(SSLKEYLOG │     │
+│  │  gRPC client)│ │  AF_PACKET)│ │ subprocess)│  │  tail)    │     │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘     │
+│        │              │              │              │            │
+│        └──────────────┴──────┬───────┴──────────────┘            │
+│                               ▼                                   │
+│                       ┌───────────────┐                           │
+│                       │  correlation  │  (fusion 5-tuple+temps)   │
+│                       └───────┬───────┘                           │
+│                               ▼                                   │
+│                       ┌───────────────┐                           │
+│                       │    storage    │  (SQLite WAL)             │
+│                       └───────┬───────┘                           │
+│                               ▼                                   │
+│                       ┌───────────────┐                           │
+│                       │   commands    │  (surface IPC Tauri)      │
+│                       └───────┬───────┘                           │
+│                               ▼                                   │
+│                          Frontend React/TS (mockup GLM à intégrer)│
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │                      killswitch                            │   │
+│  │  orchestre le cycle de vie de TOUS les sous-systèmes       │   │
+│  │  ci-dessus + nftables + CA + snapshot/diff d'état          │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 4. Domaines (Screaming Architecture)
+
+Chaque domaine = un module Rust sous `src-tauri/src/`, frontière explicite, communique via
+des types partagés dans `shared/`, jamais d'accès direct aux internes d'un autre domaine.
+
+### `attribution/`
+Client du daemon OpenSnitch (déjà installé et lancé par l'utilisateur, pas géré en
+sous-processus — c'est un daemon système persistant). Consomme son flux d'événements
+(gRPC ou lecture de ses logs structurés selon ce que permet sa version). Produit un type
+`AttributionEvent { pid, exe_path, uid, five_tuple, verdict, timestamp }`.
+
+### `capture/`
+Capture passive AF_PACKET (via `pnet` ou `pcap` crate) sur les interfaces actives.
+Parsing minimal : 5-tuple, taille, timestamp, extraction du SNI depuis le ClientHello TLS
+(sans déchiffrer — juste le champ en clair du handshake). Fournit la visibilité de base
+même quand aucune autre couche ne peut aider (pinning, protocole non-TLS).
+
+### `decryption/`
+Gère le cycle de vie de PolarProxy en sous-processus : génération/rotation de la CA locale,
+configuration du mode fail-open, lancement/arrêt, lecture de sa sortie (PCAP en continu ou
+export JSON si la version le permet). Produit un type `DecryptedFlow { five_tuple, host,
+path, headers, body_preview, content_type }` quand le déchiffrement réussit, ou un simple
+signal `PinningDetected { five_tuple, host }` quand fail-open s'est déclenché.
+
+### `keylog/`
+Gère l'injection de `SSLKEYLOGFILE` pour les applications coopérantes : variable d'env
+globale utilisateur (fichier de session), wrapper de lancement pour les `.desktop`
+d'applications ciblées (navigateurs), tail du fichier de clés en continu. Fait tourner une
+instance `tshark` en tâche de fond pointée sur ce fichier de clés pour produire des
+événements déchiffrés à partir du pcap de `capture/`, sans passer par un MITM.
+
+### `correlation/`
+Le cœur de la valeur ajoutée. Fusionne les quatre sources par 5-tuple + fenêtre temporelle
+en une timeline unique. Résout les conflits (une même connexion peut être vue par
+`capture/` en métadonnées ET par `decryption/` en clair ET par `attribution/` avec un pid).
+Détermine le niveau de visibilité final par flux : `FullyDecrypted` / `MetadataOnly`
+(pinning détecté, fail-open) / `AttributedOnly` (pas de TLS) / `Unknown`.
+
+### `storage/`
+SQLite en mode WAL (règle projet). Schéma : table `flows` (timeline unifiée), table
+`processes` (cache résolution pid→exe au fil du temps, les pid se recyclent), table
+`system_events` (actions killswitch, démarrages/arrêts de sous-systèmes, erreurs). Politique
+de rétention configurable (par défaut : 30 jours, purgeable manuellement).
+
+### `killswitch/`
+Domaine transverse, orchestrateur de cycle de vie. Responsabilités :
+- **Activation** : snapshot de l'état système avant toute modification (règles nftables
+  existantes, liste des CA de confiance, état des daemons) → écrit dans
+  `storage/system_events` → applique la chaîne nftables dédiée (`VITRAIL_REDIRECT`,
+  jamais de règle en dehors de cette chaîne nommée) → installe la CA locale → démarre
+  PolarProxy et le tail keylog.
+- **Désactivation** : flush de la chaîne `VITRAIL_REDIRECT` uniquement → retrait de la CA
+  (par empreinte exacte, jamais un retrait générique du trust store) → arrêt des
+  sous-processus → **diff de vérification** : compare l'état système post-arrêt à l'état
+  pré-activation, log toute divergence dans `system_events` et l'affiche à l'utilisateur.
+- Ne touche jamais : DNS, configuration proxy système/navigateur, autres règles nftables/
+  iptables préexistantes.
+
+### `shared/`
+Types communs (`FiveTuple`, `FlowVisibility`, `ProcessRef`), config (fichier TOML utilisateur),
+logging (`tracing` crate, équivalent Rust de loguru — pas de crate `log` nu).
+
+### `commands/`
+Seule surface exposée au frontend via `#[tauri::command]`. Aucun domaine n'est appelé
+directement par l'UI — tout passe par ce module, qui ne fait qu'agréger/déléguer (pas de
+logique métier ici).
+
+## 5. Réversibilité — garanties concrètes
+
+1. **nftables** : une seule chaîne nommée (`VITRAIL_REDIRECT`), jamais de manipulation des
+   chaînes système. Flush = suppression de la chaîne, rien d'autre.
+2. **CA locale** : générée au premier lancement, stockée hors du repo, empreinte affichée
+   dans les paramètres. Le retrait cible l'empreinte exacte injectée, jamais un
+   `update-ca-trust` générique qui pourrait toucher d'autres CA installées par ailleurs.
+3. **DNS** : jamais touché, à aucun moment. Décision explicite pour éviter la classe de bug
+   déjà rencontrée sur d'autres projets (résolveur qui ne revient pas proprement après
+   coupure).
+4. **Diff de vérification obligatoire** : chaque désactivation produit un rapport
+   avant/après consultable dans l'UI (panneau kill switch, cf. `UI_SPEC.md`).
+5. **Fail-open par défaut** : jamais de blocage silencieux d'une app à cause du pinning —
+   passthrough automatique, visibilité dégradée mais app fonctionnelle.
+
+## 6. Stack technique (décisions, division du travail)
+
+| Choix | Défaut retenu | Justification |
+|---|---|---|
+| Framework app | Tauri (Rust + frontend React/TS à venir) | Cohérent avec Aegis/NULLNODE/Anamnese ; les opérations privilégiées (nftables, CA, sous-process) sont naturelles en Rust, gRPC OpenSnitch a des bindings Rust matures |
+| Base de données | SQLite WAL | Règle projet, pas de serveur externe, cohérent local-first |
+| Logging | `tracing` + `tracing-subscriber` | Équivalent Rust de la stack loguru/pino imposée aux autres langages |
+| Licence | MIT | Cohérent avec les autres repos publics de Chris (Aegis) |
+| Packaging | AppImage (pattern Aegis) | Éprouvé, install sans root |
+
+Ce tableau est une proposition par défaut, pas une décision fermée — à valider une fois
+qu'on attaque l'implémentation (cf. section "orchestration" à discuter séparément).
+
+## 7. Ouvert / à trancher avec Chris
+
+- **Portée réseau réellement voulue** : confirmation que v1 = zéro exposition réseau
+  (IPC Tauri pur), et que "accessible depuis le réseau" visait juste l'accès local à la
+  machine elle-même, pas un dashboard distant.
+- **Blocage vs observation pure** : Vitrail v1 n'écrit aucune règle de blocage lui-même
+  (délégué à OpenSnitch) — à confirmer que c'est bien le périmètre voulu.
+- **Rétention par défaut** des événements stockés (proposé : 30 jours) et politique de
+  purge automatique.
