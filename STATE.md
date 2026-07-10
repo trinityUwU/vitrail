@@ -347,9 +347,77 @@ jamais un label "degraded" — le champ `degraded` du dashboard dépend de
 reflète donc pas immédiatement sur le dashboard tant qu'aucune désactivation/vérification
 n'a suivi. Hors scope de cette passe, à traiter si ça devient gênant à l'usage.
 
+## ⚠️ Premier test bout-en-bout réel (2026-07-10) — 3 bugs trouvés, 1 en attente de confirmation
+
+Une fois le setup système et le raccordement IPC ci-dessus en place, premier test réel du kill
+switch par Chris (`bun run tauri dev`, toggle Kill Switch → Actif). Trois découvertes, dans
+l'ordre :
+
+**1. PKCS12 manquant pour `--cacert` PolarProxy (résolu, vérifié manuellement)** — activation
+bloquée à l'étape `polarproxy` : "PolarProxy lancé mais jamais confirmé à l'écoute". Cause :
+`--cacert load <cert>` (PEM `rcgen` brut) reproduit manuellement contre le vrai binaire
+PolarProxy 2.0.1 → `Argument Error: Invalid --cacert argument`. La vraie syntaxe (`PolarProxy
+--help`) est `--cacert load:FICHIER:MOTDEPASSE`, un PKCS12, pas un PEM. `decryption::ca::
+export_pkcs12` (nouveau) shelle vers `openssl pkcs12 -export` (même pattern que `sha256sum`/
+`trust`/`nft` — un binaire externe plutôt qu'une dépendance crate `openssl`) avec un mot de
+passe aléatoire à usage unique (`/dev/urandom`, jamais persisté). Testé manuellement en dehors
+de Rust avant d'implémenter : `openssl pkcs12 -export ...` puis `PolarProxy --cacert load:...`
+écoute réellement (`ss -ltnp` confirme les deux ports). PLAN.md marquait ce point comme
+"divergence non vérifiée" depuis l'EPIC 4 — maintenant tranché contre le vrai binaire.
+
+**2. `p11-kit` renvoie une erreur même quand l'ancre CA est réellement stockée (résolu,
+reproduit manuellement 2×)** — `trust anchor --store` échoue TOUJOURS avec "couldn't create
+object: The field is read-only" sur cette machine (Arch, p11-kit 0.26.2), y compris sur une CA
+JAMAIS installée auparavant — pas seulement en réinstallation. `trust list --filter=ca-anchors`
+confirme l'ancre bien présente malgré l'erreur rapportée. `vitrail-helper/src/ca.rs` traite
+maintenant spécifiquement CE message comme un avertissement (jamais les autres échecs de
+`trust`). Bug distinct trouvé au passage et corrigé : `remove_ca` supprimait le fichier ancre
+AVANT d'appeler `trust anchor --remove` dessus (l'ordre inverse du nécessaire — la commande a
+besoin du fichier lisible). **Limite connue restante** : le retrait (`trust anchor --remove`)
+échoue réellement (pas un faux négatif comme le store) — reproduit manuellement, "couldn't
+remove read-only certificate", `rotate_ca`/retrait de CA reste cassé sur cette version de
+p11-kit. 2 CA orphelines (`bc2eb554...`, `fca38869...`, générées par les tentatives ratées
+avant le fix #1) restent dans le trust store — cosmétique, aucun risque (ce sont nos propres
+CA auto-signées), non nettoyées.
+
+**3. Coupure réseau réelle observée par Chris (fix appliqué, PAS ENCORE CONFIRMÉ — reprendre
+la session suivante par une vérification live)** — une fois la redirection PolarProxy
+réellement active pour la première fois, Discord et même la connexion réseau de Claude Code
+lui-même (ce process) se sont déconnectés ~1 minute après activation. Diagnostic : ping ICMP
+n'a jamais échoué (confirmé par Chris, `ping 8.8.8.8` tournait pendant toute la coupure) — donc
+pas une panne réseau générale, seulement les connexions TCP/TLS interceptées. Cause probable :
+Discord (Electron) et Claude Code (Node.js) utilisent chacun leur PROPRE magasin de certificats
+de confiance, pas le trust store système où la CA Vitrail est installée — ils rejettent donc le
+certificat forgé par PolarProxy. Notre invocation ne passait jamais `--bypassonfail` (option
+PolarProxy documentée `--help` : bascule automatiquement en pass-through après N échecs de
+handshake) — sans elle, une app dont le certificat est rejeté boucle indéfiniment sur le
+handshake (jusqu'à 2×`--tlstimeout`, 30s par défaut = ~1min, cohérent avec le timing observé)
+au lieu d'être laissée passer en direct. Le mécanisme "PinningDetected"/fail-open documenté
+dans PLAN.md §6nonies n'avait en réalité jamais été câblé — le log qu'on voyait dessus
+("PolarProxy: le flux vers discord.gg a été mis en fail-open") venait de `mock_data.rs`
+(donnée fictive), pas d'un vrai comportement. Fix : `--bypassonfail 1:300 --tlstimeout 5`
+ajoutés à l'invocation (`polarproxy_process.rs`). **App relancée avec le fix mais Chris n'a
+pas encore eu l'occasion de re-tester en conditions réelles avant la fin de cette session —
+c'est la toute première chose à vérifier à la prochaine reprise.**
+
+**Bug de méthode trouvé en clôturant la session (résolu)** : l'implémentation du point 1
+(export PKCS12) avait été câblée dans `PolarProxySubsystem::try_start_polarproxy` (donc
+appelée AVANT `backend.spawn()`), ce qui déclenchait un VRAI `openssl` même dans les tests
+utilisant `FakePolarProxyBackend` — violation de l'invariant du projet "jamais de process réel
+en test" (16 tests ont commencé à échouer en cascade, mutex `ENV_GUARD` empoisonné par le
+premier échec). Déplacé dans `SystemPolarProxyBackend::spawn()` (jamais atteint par les fakes),
+`PolarProxyConfig` ne porte plus que les chemins PEM bruts. `cargo test -p vitrail --lib`
+100 % vert (99 tests) après correction — vérifié avant la clôture de session.
+
 ## Prochaine étape
 
-Les 7 EPICs de logique système (1-7) sont tous livrés, audités, corrigés. Reste :
+**Priorité #1 à la prochaine session** : demander à Chris de retester le kill switch en
+conditions réelles avec le fix `--bypassonfail`/`--tlstimeout` (point 3 ci-dessus) — garder
+Discord ou une autre app ouverte, observer si la déconnexion se reproduit après ~1 minute.
+Si ça persiste, creuser plus loin (peut-être `--bypassonfail` a besoin d'un seuil différent,
+ou d'autres apps ont des comportements différents face à un cert non reconnu).
+
+Les 7 EPICs de logique système (1-7) sont tous livrés, audités, corrigés. Reste ensuite :
 - **Validation manuelle réelle par Chris** : PolarProxy contre une vraie app à pinning
   connu (EPIC 4), `opensnitchd` réel avec `AskRule` en conditions réelles (EPIC 1), `tshark`
   réel avec une vraie app exportant `SSLKEYLOGFILE` (EPIC 3) — aucun des trois n'a pu être

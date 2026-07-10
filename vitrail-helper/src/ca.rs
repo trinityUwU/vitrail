@@ -41,16 +41,24 @@ pub fn remove_ca(fingerprint: &str) -> Result<(), String> {
 
     let mut removed = false;
     if trust_path.exists() {
-        remove_verified(&trust_path, fingerprint)?;
+        verify_fingerprint(&trust_path, fingerprint)?;
+        // `trust anchor --remove` a besoin du fichier lisible sur disque pour identifier
+        // l'objet à retirer (chemin, pas juste empreinte) — l'appeler APRÈS suppression du
+        // fichier (bug précédent) le fait échouer systématiquement sur un chemin déjà mort.
         if which("trust") {
             run(Command::new("trust")
                 .args(["anchor", "--remove"])
                 .arg(&trust_path))?;
         }
+        std::fs::remove_file(&trust_path)
+            .map_err(|error| format!("suppression de {} échouée: {error}", trust_path.display()))?;
         removed = true;
     }
     if debian_path.exists() {
-        remove_verified(&debian_path, fingerprint)?;
+        verify_fingerprint(&debian_path, fingerprint)?;
+        std::fs::remove_file(&debian_path).map_err(|error| {
+            format!("suppression de {} échouée: {error}", debian_path.display())
+        })?;
         if which("update-ca-certificates") {
             run(&mut Command::new("update-ca-certificates"))?;
         }
@@ -65,8 +73,8 @@ pub fn remove_ca(fingerprint: &str) -> Result<(), String> {
 
 /// Vérifie que le fichier trouvé au chemin dérivé de l'empreinte a bien CETTE empreinte exacte
 /// avant suppression (défense en profondeur contre une collision de nommage) — jamais une
-/// suppression basée sur le seul nom de fichier.
-fn remove_verified(path: &Path, expected_fingerprint: &str) -> Result<(), String> {
+/// suppression basée sur le seul nom de fichier. Lecture seule : ne supprime rien elle-même.
+fn verify_fingerprint(path: &Path, expected_fingerprint: &str) -> Result<(), String> {
     let actual = sha256_file(&path.to_string_lossy())?;
     if actual != expected_fingerprint {
         return Err(format!(
@@ -75,25 +83,40 @@ fn remove_verified(path: &Path, expected_fingerprint: &str) -> Result<(), String
             path.display()
         ));
     }
-    std::fs::remove_file(path)
-        .map_err(|error| format!("suppression de {} échouée: {error}", path.display()))
+    Ok(())
 }
 
 fn anchor_path(dir: &str, fingerprint: &str) -> PathBuf {
     PathBuf::from(dir).join(format!("vitrail-{fingerprint}.pem"))
 }
 
+/// p11-kit renvoie ce message et un code de sortie non-nul même quand l'ancre est réellement
+/// stockée — reproduit manuellement sur cette machine (Arch, p11-kit 0.26.2) sur une CA
+/// JAMAIS installée auparavant, pas seulement en réinstallation : `trust list --filter=ca-
+/// anchors` montre l'ancre bien présente après l'échec rapporté. Traiter spécifiquement CE
+/// message comme un avertissement (jamais les autres échecs de `trust`, qui restent fatals).
+const P11_KIT_BENIGN_ERROR: &str = "couldn't create object: The field is read-only";
+
 fn install_via_trust(cert_path: &str, fingerprint: &str) -> Result<(), String> {
     let dest = anchor_path(TRUST_ANCHOR_DIR, fingerprint);
     // Le nom de fichier encode l'empreinte exacte : si présent, c'est déjà CETTE CA, installée
-    // par une activation précédente. `trust anchor --store` sur un objet p11-kit déjà stocké
-    // échoue ("field is read-only") au lieu de no-op — vérifier avant plutôt que de réessayer.
+    // par une activation précédente — no-op plutôt que de réessayer un `trust anchor --store`.
     if dest.exists() {
         return Ok(());
     }
     std::fs::copy(cert_path, &dest)
         .map_err(|error| format!("copie vers {} échouée: {error}", dest.display()))?;
-    run(Command::new("trust").args(["anchor", "--store"]).arg(&dest))
+    match run(Command::new("trust").args(["anchor", "--store"]).arg(&dest)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.contains(P11_KIT_BENIGN_ERROR) => {
+            eprintln!(
+                "vitrail-helper: avertissement p11-kit ignoré (ancre réellement stockée \
+                 malgré le code d'erreur, quirk connu de cette version): {error}"
+            );
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn install_via_debian(cert_path: &str, fingerprint: &str) -> Result<(), String> {

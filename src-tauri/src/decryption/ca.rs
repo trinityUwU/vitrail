@@ -7,17 +7,22 @@
 //! casserait la confiance déjà accordée par l'utilisateur entre deux sessions courtes — le
 //! kill switch régule la REDIRECTION (nftables/PolarProxy), pas la présence de la CA en soi.
 //!
-//! DIVERGENCE SIGNALÉE (recherche CLI PolarProxy, EPIC 4) : PolarProxy ne charge une CA
-//! externe que via `--cacert load <fichier PKCS12>`. `rcgen` ne produit pas de PKCS12 (aucune
-//! dépendance OpenSSL disponible sans contredire la raison même de son choix ici). Le cert PEM
-//! généré ci-dessous est passé tel quel à `--cacert load` par `polarproxy_process.rs` — ce
-//! point précis (format exact accepté par ce flag) N'A PAS pu être vérifié contre un vrai
-//! binaire PolarProxy (absent de cette machine, cf. rapport de livraison), à valider par Chris.
+//! DIVERGENCE RÉSOLUE (2026-07-10, vérifié contre le vrai binaire PolarProxy 2.0.1 — la CLI
+//! réelle enfin disponible sur cette machine) : `--cacert load:FICHIER:MOTDEPASSE` exige un
+//! PKCS12, pas le PEM `rcgen` brut (reproduit manuellement : `PolarProxy --cacert load <pem>`
+//! échoue immédiatement avec "Argument Error: Invalid --cacert argument"). `export_pkcs12`
+//! shelle vers le binaire `openssl` (même pattern que `sha256sum`/`trust`/`nft` — un binaire
+//! externe à surface étroite plutôt qu'une dépendance crate `openssl` qui contredirait la
+//! raison même du choix de `rcgen`) pour convertir cert+clé PEM en PKCS12 à la demande, avec
+//! un mot de passe aléatoire À USAGE UNIQUE (jamais persisté : régénéré à chaque lancement de
+//! PolarProxy par `PolarProxySubsystem::start()`, le fichier `.p12` n'a besoin de survivre que
+//! le temps du process PolarProxy en cours).
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rcgen::{CertificateParams, DnType, KeyPair};
@@ -32,6 +37,7 @@ use super::vitrail_data_dir;
 
 const CERT_FILE: &str = "ca.pem";
 const KEY_FILE: &str = "ca.key";
+const PKCS12_FILE: &str = "ca.p12";
 
 pub fn ca_dir() -> PathBuf {
     vitrail_data_dir().join("ca")
@@ -80,6 +86,53 @@ fn write_private_key(path: &PathBuf, pem: &str) -> Result<(), String> {
 fn fingerprint_der(der: &[u8]) -> String {
     let digest = Sha256::digest(der);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Convertit la CA PEM courante en PKCS12 pour PolarProxy (`--cacert load:FICHIER:MOTDEPASSE`,
+/// cf. doc de module). Mot de passe aléatoire à usage unique — jamais persisté nulle part,
+/// jamais réutilisé d'un lancement à l'autre. Écrase `ca.p12` s'il existe déjà (résidu d'un
+/// lancement précédent de PolarProxy, jamais nettoyé automatiquement).
+pub fn export_pkcs12(cert_path: &str, key_path: &str) -> Result<(PathBuf, String), String> {
+    let password = random_password()?;
+    let dest = ca_dir().join(PKCS12_FILE);
+
+    // Pré-créer le fichier avec 600 AVANT que `openssl` n'écrive dedans (même discipline
+    // TOCTOU-safe que `write_private_key`) : `openssl -out` sur un fichier déjà existant
+    // réutilise l'inode et ses permissions, ne les réinitialise jamais à la création.
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&dest)
+        .map_err(|error| format!("pré-création de {dest:?} échouée: {error}"))?;
+
+    let output = Command::new("openssl")
+        .args(["pkcs12", "-export", "-in", cert_path, "-inkey", key_path])
+        .arg("-out")
+        .arg(&dest)
+        .arg("-passout")
+        .arg(format!("pass:{password}"))
+        .output()
+        .map_err(|error| format!("échec d'exécution d'`openssl pkcs12`: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`openssl pkcs12 -export` a échoué: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok((dest, password))
+}
+
+/// Mot de passe hex 32 caractères (16 octets d'entropie) — lu directement depuis `/dev/urandom`
+/// avec `read_exact` sur un buffer fixe (jamais `fs::read`, qui bouclerait indéfiniment sur un
+/// périphérique caractère sans fin de fichier).
+fn random_password() -> Result<String, String> {
+    let mut bytes = [0u8; 16];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut file| file.read_exact(&mut bytes))
+        .map_err(|error| format!("lecture de /dev/urandom échouée: {error}"))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 pub struct CaSubsystem {

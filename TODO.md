@@ -36,12 +36,22 @@ le backlog non structuré.
 
 ## Immédiat
 
+- [ ] **PRIORITÉ #1 PROCHAINE SESSION** : demander à Chris de retester le kill switch en
+      conditions réelles (Discord ou autre app ouverte) avec le fix `--bypassonfail 1:300
+      --tlstimeout 5` (2026-07-10, cf. STATE.md "Premier test bout-en-bout réel", point 3) —
+      la coupure réseau observée (Discord + Claude Code déconnectés ~1min après activation)
+      n'a PAS encore été reconfirmée résolue après le fix, app relancée en fin de session sans
+      qu'un nouveau test complet ait eu lieu.
 - [x] **BLOQUANT USAGE RÉEL** (2026-07-10, résolu — cf. STATE.md) : setup système complet
       (vitrail-helper/policy polkit/setcap/tshark/opensnitchd/PolarProxy/agent polkit
       Hyprland), bug d'idempotence CA corrigé, et raccordement IPC réel de
       dashboard/processus/destinations/journal système (PLAN.md §6decies) — Alertes & Règles
       en stub honnête vide (décision explicite, pas de moteur d'évaluation dans cette passe).
-      Reste à confirmer par un test bout-en-bout complet par Chris.
+- [x] Premier test bout-en-bout réel (2026-07-10) : 3 bugs trouvés et corrigés (PKCS12 pour
+      `--cacert` PolarProxy, quirk p11-kit sur `trust anchor --store`/bug d'ordre `remove_ca`,
+      `--bypassonfail` manquant côté PolarProxy) — voir STATE.md pour le détail complet.
+      Retrait de CA (`rotate_ca`) reste cassé sur cette version de p11-kit (limitation connue,
+      2 CA orphelines cosmétiques dans le trust store, aucun risque).
 
 - [x] Repo GitHub public créé et poussé : https://github.com/trinityUwU/vitrail.
 - [x] EPIC 7 (squelette kill switch) livré, audité, corrigé — voir STATE.md.

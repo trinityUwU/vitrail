@@ -7,10 +7,15 @@
 //! thread appelant `stop()` et le thread de garde (qui bloque potentiellement plusieurs
 //! secondes sur `wait()`), donc aucun risque de deadlock entre les deux.
 //!
-//! CLI réelle (recherche EPIC 4, Netresec) : `PolarProxy -p <port>,<decrypted-port>,<target>
-//! --cacert load <cert> -f <flowlog> --pcapoverip <port> -v`. Format exact de `--cacert load`
-//! (PEM vs PKCS12 strict) NON vérifié contre un vrai binaire (absent de cette machine, cf.
-//! rapport de livraison) — même incertitude assumée que `-T ek` en EPIC 3.
+//! CLI réelle vérifiée contre le vrai binaire PolarProxy 2.0.1 (2026-07-10) : `PolarProxy -p
+//! <port>,<decrypted-port>,<target> --cacert load:<pkcs12>:<motdepasse> -f <flowlog>
+//! --pcapoverip <port> -v`. `--cacert load` exige un PKCS12, jamais le PEM `rcgen` brut —
+//! reproduit manuellement, confirmé par `PolarProxy --help`. La conversion PEM→PKCS12
+//! (`decryption::ca::export_pkcs12`, shelle vers `openssl`) a lieu DANS
+//! `SystemPolarProxyBackend::spawn()`, jamais dans `subsystem.rs` : `PolarProxyConfig` ne
+//! porte que les chemins PEM, sinon un test injectant `FakePolarProxyBackend` déclencherait
+//! quand même un vrai `openssl` avant d'atteindre le fake (violerait "jamais de process réel
+//! en test" — bug réel introduit puis corrigé le 2026-07-10, cf. STATE.md).
 
 use std::io;
 use std::net::TcpStream;
@@ -28,6 +33,7 @@ pub struct PolarProxyAvailability {
 
 pub struct PolarProxyConfig {
     pub ca_cert_path: PathBuf,
+    pub ca_key_path: PathBuf,
     pub listen_port: u16,
     pub decrypted_port: u16,
     pub pcapoverip_port: u16,
@@ -91,6 +97,12 @@ impl PolarProxyBackend for SystemPolarProxyBackend {
     }
 
     fn spawn(&self, config: &PolarProxyConfig) -> io::Result<SpawnedPolarProxy> {
+        let (pkcs12_path, pkcs12_password) = super::ca::export_pkcs12(
+            &config.ca_cert_path.to_string_lossy(),
+            &config.ca_key_path.to_string_lossy(),
+        )
+        .map_err(io::Error::other)?;
+
         let child = Command::new("PolarProxy")
             .arg("-p")
             .arg(format!(
@@ -98,12 +110,26 @@ impl PolarProxyBackend for SystemPolarProxyBackend {
                 config.listen_port, config.decrypted_port
             ))
             .arg("--cacert")
-            .arg("load")
-            .arg(&config.ca_cert_path)
+            .arg(format!(
+                "load:{}:{}",
+                pkcs12_path.display(),
+                pkcs12_password
+            ))
             .arg("-f")
             .arg(&config.flowlog_path)
             .arg("--pcapoverip")
             .arg(config.pcapoverip_port.to_string())
+            // Sans ceci, un client qui rejette le certificat forgé (pinning, ou magasin de
+            // confiance propre à l'app — Electron/Node.js n'utilisent PAS le trust store
+            // système où la CA Vitrail est installée) boucle indéfiniment sur le handshake
+            // TLS (jusqu'à 2×`--tlstimeout` avant échec) au lieu de basculer en pass-through
+            // — observé en conditions réelles (Discord + Claude Code CLI déconnectés ~1min
+            // après activation, 2026-07-10). 1 échec suffit à basculer, mémorisé 5 min pour
+            // éviter de retenter la voie lente à chaque reconnexion du même client.
+            .arg("--bypassonfail")
+            .arg("1:300")
+            .arg("--tlstimeout")
+            .arg("5")
             .arg("-v")
             .stdout(Stdio::null())
             .stderr(Stdio::piped())

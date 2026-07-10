@@ -125,6 +125,7 @@ impl PolarProxySubsystem {
 
         let config = PolarProxyConfig {
             ca_cert_path: PathBuf::from(&ca.cert_path),
+            ca_key_path: PathBuf::from(&ca.key_path),
             listen_port: Self::listen_port(),
             decrypted_port: DEFAULT_DECRYPTED_PORT,
             pcapoverip_port: DEFAULT_PCAPOVERIP_PORT,

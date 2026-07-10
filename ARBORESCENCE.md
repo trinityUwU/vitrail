@@ -70,9 +70,15 @@ src-tauri/                  — backend Tauri (Rust)
       events.rs                   — CapturedPacket, persistance JSONL 600 (capture_events.jsonl)
     decryption/                — EPIC 4 : orchestration PolarProxy réelle (livré, audité)
       mod.rs                    — déclaration du sous-module
-      ca.rs                      — CA rcgen, clé privée 600, empreinte SHA-256 trackée
+      ca.rs                      — CA rcgen, clé privée 600, empreinte SHA-256 trackée,
+                                    export_pkcs12 (shelle openssl, mot de passe /dev/urandom
+                                    à usage unique — jamais persisté, 2026-07-10)
       polarproxy_process.rs       — PolarProxyBackend (réel + fake), confirm_listening sur
-                                     le vrai port d'écoute (bug audit corrigé)
+                                     le vrai port d'écoute (bug audit corrigé) ; spawn() réel
+                                     convertit PEM→PKCS12 en interne (jamais dans subsystem.rs,
+                                     sinon un test avec FakePolarProxyBackend déclencherait
+                                     quand même un vrai openssl — bug trouvé et fixé 2026-07-10),
+                                     --bypassonfail/--tlstimeout (fail-open réel sur cert rejeté)
       abnormal_exit_guard.rs        — garde-fou anti-blackhole : retire nft-redirect si
                                        PolarProxy meurt, retry borné, état honnête
       output.rs                      — parsing sortie PolarProxy → DecryptedFragment/
